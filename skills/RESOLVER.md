@@ -25,6 +25,14 @@ This is the dispatcher. Skills are the implementation. **Read the skill file bef
 | "what search mode", "is my cache hot", "tune my retrieval", "compare search modes", "clear search overrides" | `gbrain search modes/stats/tune` directly. See `skills/conventions/search-modes.md` |
 | "eval results", "search benchmark", "haters-immune methodology", "regression check on retrieval" | `gbrain eval run-all` / `gbrain eval compare`. See `docs/eval/SEARCH_MODE_METHODOLOGY.md` |
 
+## Call & meeting workflow
+
+| Trigger | Skill |
+|---------|-------|
+| "brief me on", "prep call with", "call brief for", "/brief" | `skills/call-brief-generator/SKILL.md` |
+| "process call", "debrief", "post-call", "what came out of the call", "/debrief" | `skills/post-call-processor/SKILL.md` |
+| New transcript at `~/brain/meetings/*.md` matches a pre-call brief (auto-detect) | `skills/post-call-processor/SKILL.md` (auto-fires via LaunchAgent or chained after granola-sync) |
+
 ## Content & media ingestion
 
 | Trigger | Skill |
