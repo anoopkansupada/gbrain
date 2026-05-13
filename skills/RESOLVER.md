@@ -23,6 +23,14 @@ This is the dispatcher. Skills are the implementation. **Read the skill file bef
 | Share a brain page as a link | `skills/publish/SKILL.md` |
 | "validate frontmatter", "check frontmatter", "fix frontmatter", "frontmatter audit", "brain lint" | `skills/frontmatter-guard/SKILL.md` |
 
+## Call & meeting workflow
+
+| Trigger | Skill |
+|---------|-------|
+| "brief me on", "prep call with", "call brief for", "/brief" | `skills/call-brief-generator/SKILL.md` |
+| "process call", "debrief", "post-call", "what came out of the call", "/debrief" | `skills/post-call-processor/SKILL.md` |
+| New transcript at `~/brain/meetings/*.md` matches a pre-call brief (auto-detect) | `skills/post-call-processor/SKILL.md` (auto-fires via LaunchAgent or chained after granola-sync) |
+
 ## Content & media ingestion
 
 | Trigger | Skill |
