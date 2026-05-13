@@ -114,6 +114,29 @@ Then read:
   context event. **If the calendar entry is missing, do not reference the
   event in the brief.** This is the anti-hallucination guard.
 
+
+### 1.5. Read past gap_feedback
+
+Before writing a word of brief content, pull prior corrections for this participant.
+
+```bash
+# list the 5 most-recently-updated briefs tagged with this participant
+list_pages type=brief tag=<participant-slug> sort=updated_desc limit=5
+```
+
+For each brief returned, `get_page briefs/<slug>` and extract the
+`## What the brief got wrong (for future generations)` section if present.
+Collect these into a `prior_gap_feedback` list.
+
+Pass `prior_gap_feedback` into the synthesis step (Phase 2) as additional
+context with this instruction prepended to the LLM call:
+
+> **Prior corrections (honor these; do not repeat):**
+> <bullet list of gap_feedback.issue items from prior briefs>
+
+If no prior briefs exist for the participant, skip silently — no hallucinated
+corrections.
+
 ### 2. Synthesize the brief
 
 Apply the five-block template. Each block has a time budget and a purpose:
@@ -267,6 +290,8 @@ H2 = Instrument Serif 30-34px. Body = Inter Tight 15-16px. Data tables and
 metadata = JetBrains Mono 11-12px. Never use Inter, Roboto, or Arial.
 
 ## Anti-Patterns
+
+- **Generating a new brief for a participant without reading their prior gap_feedback.** The corrections compound — losing them defeats the loop. Phase 1.5 is non-optional when prior briefs exist for the participant.
 
 - **Inferring an event location.** If the calendar entry is not on disk, do
   not write "we met at X" — write nothing or a blank field. See
