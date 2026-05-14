@@ -96,10 +96,34 @@ gbrain get <entity_slug>
 
 Build a context dict: brief body, transcript body, prior state of each entity.
 
-### 2. Extract structured facts (LLM, locked schema)
+### 2. Speaker disambiguation (pre-flight — required when transcript contains "Unknown" speakers)
 
-Single LLM pass. Output must validate against this schema or the skill
-short-circuits to a manual-review task.
+Before running the extraction pass, check whether the transcript body uses "**Unknown**" as any speaker tag.
+
+**If Unknown speakers are detected:**
+
+1. Build the participant pair from the brief frontmatter. There are always exactly two voices on a Hash Directors call: (a) the call subject (`[[people/<participant>]]`) and (b) Anoop Kansupada (`[[people/anoop-kansupada]]`).
+
+2. Run a lightweight speaker-assignment pass over the full transcript before extraction:
+   - Scan every "**Unknown**: ..." line and assign it to either `anoop` or `<participant_slug>`.
+   - First-person self-descriptions are the primary signal: "my style is", "the way I do it", "I approach it by", "my clients", "I close by" — **these belong to whoever is speaking them, NOT to the call subject by default.**
+   - Contextual signals: the call subject's name mentioned in third person confirms the opposing speaker.
+   - On a knowledge-download call, Anoop is the interviewer: he drives the agenda, shares his own context when asked, asks questions. The counterpart shares their book, referrers, and clients.
+   - When a first-person statement describes a technique, close method, or BD philosophy, attribute it to the speaker — not to the call subject simply because the brief is named after them.
+
+3. Produce a `speaker_map` before extraction: `{ line_index: "anoop" | "<participant_slug>" }`.
+
+4. Pass `speaker_map` into the extraction pass so every extracted fact carries the correct attribution.
+
+**If no Unknown speakers:** skip this phase.
+
+**Critical rule:** A brief named after Person X does not mean all BD techniques discussed belong to Person X. Attribution follows speaker identity. A speaker describing their own style in the first person is describing their own style — period.
+
+---
+
+### 3. Extract structured facts (LLM, locked schema)
+
+Single LLM pass using the `speaker_map` from step 2 (or unmodified transcript if no Unknown tags). Output must validate against this schema or the skill short-circuits to a manual-review task.
 
 ```yaml
 covered_vs_planned:
@@ -147,7 +171,7 @@ gap_feedback:
     fix: "<concrete change to template/generator>"
 ```
 
-### 3. Update the brief
+### 4. Update the brief
 
 1. Frontmatter: `status: post-call-debrief`, `related_granola: "[[meetings/<meeting_slug>]]"`.
 2. Append a `## Post-call debrief — what we actually covered` section with:
@@ -157,14 +181,14 @@ gap_feedback:
 3. **Do NOT touch the pre-call body sections.** Preserve the audit trail of
    what was planned.
 
-### 4. Update the transcript
+### 5. Update the transcript
 
 1. Append to frontmatter: `prep_brief: "[[briefs/<brief_slug>]]"`,
    `participants: [...]` (canonicalize "Unknown" Granola attendees against
    brief participants).
 2. Append `## Post-call links` section pointing to brief + tasks + draft email.
 
-### 5. Write task pages
+### 6. Write task pages
 
 For each `action_items` entry, write `~/brain/tasks/<participant-slug>-<call-date>-<task-slug>.md`:
 
@@ -201,7 +225,7 @@ and [[meetings/<meeting_slug>]].
 <full context including transcript quote if relevant>
 ```
 
-### 6. Update entity pages
+### 7. Update entity pages
 
 For each `service_provider_updates` entry, append a `service_providers:`
 list item to the subject page's frontmatter (schema defined in
@@ -215,7 +239,7 @@ per `skills/conventions/quality.md`.
 For each `deal_status_updates` entry, append a timeline entry to the deal
 page using `add_timeline_entry`.
 
-### 7. Draft the follow-up email
+### 8. Draft the follow-up email
 
 Write `~/brain/emails/<brief_slug>-followup.md` with frontmatter:
 
@@ -249,7 +273,7 @@ Body writing rules:
   the confidential fact itself.
 - **No subject-line emoji.** Operator's existing voice is unadorned.
 
-### 8. Commit + sync + verify
+### 9. Commit + sync + verify
 
 ```bash
 cd ~/brain
@@ -282,7 +306,7 @@ Heartbeat to `~/.gbrain/integrations/post-call-processor/heartbeat.jsonl`:
 }
 ```
 
-### 9. Render web/ HTML versions
+### 10. Render web/ HTML versions
 
 - `~/Projects/active/hash-lemma/web/public/briefs/<brief_slug>.html` —
   regenerate with the post-call section appended (same light-mode design
@@ -293,7 +317,7 @@ Heartbeat to `~/.gbrain/integrations/post-call-processor/heartbeat.jsonl`:
 - Task pages do NOT get per-file HTML; they surface via the `/tasks` route in
   `web/`.
 
-### 10. Verify before declaring done
+### 11. Verify before declaring done
 
 - Brief frontmatter has `status: post-call-debrief` and `related_granola:` set.
 - Transcript frontmatter has `prep_brief:` set.
@@ -366,6 +390,7 @@ transcripts. Eliminates the polling lag.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | No brief matches transcript | Transcript participants are "Unknown" (Granola anonymization) | Operator manually edits transcript frontmatter to canonicalize names; skill matches on `date` alone as fallback |
+| Facts attributed to wrong speaker | Granola tagged all speakers "Unknown"; LLM defaulted to call-subject for everything | Phase 2 speaker disambiguation now prevents this. If a brief was already processed without it, re-run with `--force` and review the extracted BD-style / technique sections manually — first-person self-descriptions are always the speaker's, not the subject's. |
 | LLM extraction returns malformed schema | Prompt drift or model behavior change | Re-run with `--strict-schema`; after 2 retries, emit manual-review task and stop |
 | Email draft references a task that doesn't exist | Race condition between task write and email write | Phase 5 (tasks) always completes before Phase 7 (email); ordering is the fix |
 | Brief gets re-processed unintentionally | Operator manually reverted `status: post-call-debrief` | Skill checks `related_granola`; if set, no-op unless `--force` |
