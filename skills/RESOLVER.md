@@ -22,6 +22,7 @@ This is the dispatcher. Skills are the implementation. **Read the skill file bef
 | "Research", "track", "extract from email", "investor updates", "donations" | `skills/data-research/SKILL.md` |
 | Share a brain page as a link | `skills/publish/SKILL.md` |
 | "validate frontmatter", "check frontmatter", "fix frontmatter", "frontmatter audit", "brain lint" | `skills/frontmatter-guard/SKILL.md` |
+| "link tasks to goals", "audit tasks", "task audit", "/task-link" | `skills/task-goal-linker/SKILL.md` |
 
 ## Call & meeting workflow
 
