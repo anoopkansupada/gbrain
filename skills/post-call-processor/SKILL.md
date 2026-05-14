@@ -96,11 +96,17 @@ gbrain get <entity_slug>
 
 Build a context dict: brief body, transcript body, prior state of each entity.
 
-### 2. Speaker disambiguation (pre-flight — required when transcript contains "Unknown" speakers)
+### 2. Speaker disambiguation (pre-flight — required when transcript has non-canonical speaker labels)
 
-Before running the extraction pass, check whether the transcript body uses "**Unknown**" as any speaker tag.
+Before running the extraction pass, check whether the transcript body uses any of the following non-canonical speaker labels:
 
-**If Unknown speakers are detected:**
+- `**Unknown**:` — Granola fallback when diarization can't assign a participant.
+- `Speaker [A-Z]:` — raw assemblyai diarization (no name resolution).
+- **Host-collapse** — >70% of turns are tagged with the same single name (Granola sometimes maps all unresolved turns to the note creator, e.g. all turns become `**Anoop Kansupada**:`).
+
+**Why all three matter:** any of these failure modes corrupts downstream attribution. 2026-05-14 — the May 3 Karel-dinner transcript landed with Granola having collapsed every turn to `Anoop Kansupada`. Raw assemblyai output (re-fetched via `granola.get_transcript`) showed Speaker A=Anoop, Speaker B=Karel, Speaker C=Waiter. Without this broader check, the brief would have attributed all of Karel's competitive-landscape narrative (Marc Piano, Glenn Kennedy, Oliver Bell) to Anoop himself.
+
+**If any non-canonical labeling is detected:**
 
 1. Build the participant pair from the brief frontmatter. There are always exactly two voices on a Hash Directors call: (a) the call subject (`[[people/<participant>]]`) and (b) Anoop Kansupada (`[[people/anoop-kansupada]]`).
 
@@ -115,7 +121,7 @@ Before running the extraction pass, check whether the transcript body uses "**Un
 
 4. Pass `speaker_map` into the extraction pass so every extracted fact carries the correct attribution.
 
-**If no Unknown speakers:** skip this phase.
+**If transcript is fully resolved (all speakers are canonical participant names AND no single name holds >70% of turns):** skip this phase.
 
 **Critical rule:** A brief named after Person X does not mean all BD techniques discussed belong to Person X. Attribution follows speaker identity. A speaker describing their own style in the first person is describing their own style — period.
 
