@@ -1,0 +1,148 @@
+#!/bin/bash
+# Task ↔ Goal Linker v0.2 — one LLM call resolves all unlinked tasks at once.
+set -euo pipefail
+source ~/.zprofile 2>/dev/null || true
+export PATH="/Users/jarvis/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:$PATH"
+
+GBRAIN_DIR="$HOME/gbrain"
+INTEG_DIR="$HOME/.gbrain/integrations/task-goal-linker"
+HEARTBEAT="$INTEG_DIR/heartbeat.jsonl"
+CLAUDE=/Users/jarvis/.nvm/versions/node/v24.15.0/bin/claude
+DRY_RUN=0; FORCE=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    --force)   FORCE=1 ;;
+  esac
+done
+mkdir -p "$INTEG_DIR"
+TODAY=$(date -u +%Y-%m-%d)
+REPORT_SLUG="reports/task-link-audit-$TODAY"
+
+cd "$GBRAIN_DIR"
+
+python3 - <<PY
+import os, re, subprocess, sys, json, tempfile, yaml
+DRY_RUN=$DRY_RUN; FORCE=$FORCE
+REPORT_SLUG="$REPORT_SLUG"; GBRAIN_DIR="$GBRAIN_DIR"; CLAUDE="$CLAUDE"
+ENV={**os.environ,"PATH":"/Users/jarvis/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:"+os.environ.get("PATH","")}
+
+def cli(*a, stdin=None):
+    p=subprocess.run(["bun","run","src/cli.ts",*a], cwd=GBRAIN_DIR, input=stdin,
+                     capture_output=True, text=True, env=ENV)
+    return p.stdout
+
+def list_pages(t):
+    out=cli("list","--type",t,"--limit","500")
+    rows=[]
+    for ln in out.splitlines():
+        if not ln or ln.startswith("[") or ln.startswith("Usage"): continue
+        parts=ln.split("\t")
+        if len(parts)>=2 and "/" in parts[0]:
+            rows.append({"slug":parts[0],"title":parts[-1] if len(parts)>=4 else ""})
+    return rows
+
+def get_raw(slug):
+    out=cli("get",slug)
+    i=out.find("---\n")
+    return out[i:] if i>=0 else out
+
+def parse(raw):
+    m=re.match(r"^---\n(.*?)\n---\n(.*)$",raw,re.DOTALL)
+    if not m: return {},raw
+    try: fm=yaml.safe_load(m.group(1)) or {}
+    except Exception: fm={}
+    return fm,m.group(2)
+
+def put_page(slug,content):
+    if DRY_RUN: print(f"[dry-run] put {slug}",file=sys.stderr); return
+    subprocess.run(["bun","run","src/cli.ts","put",slug],cwd=GBRAIN_DIR,
+                   input=content,capture_output=True,text=True,env=ENV)
+
+# 1. Load goals
+goals=[]
+for g in list_pages("goal"):
+    raw=get_raw(g["slug"]); fm,body=parse(raw)
+    goals.append({"slug":g["slug"],"period":fm.get("period",""),
+                  "horizon":fm.get("horizon","monthly"),
+                  "start":str(fm.get("start_date",""))[:10],
+                  "end":str(fm.get("end_date",""))[:10],
+                  "priorities":body[:800]})
+print(f"[linker] {len(goals)} goals",file=sys.stderr)
+
+# 2. Load tasks needing linkage
+candidates=[]; missing_meta=[]
+for t in list_pages("task"):
+    raw=get_raw(t["slug"]); fm,body=parse(raw)
+    miss=[]
+    if not (fm.get("deadline") or fm.get("due")): miss.append("due")
+    if not fm.get("owner"): miss.append("owner")
+    if miss: missing_meta.append({"task":t["slug"],"missing":miss})
+    if fm.get("parent_goal") and not FORCE: continue
+    candidates.append({"slug":t["slug"],"title":fm.get("title") or t.get("title",""),
+                       "deadline":str(fm.get("deadline") or fm.get("due") or "")[:10],
+                       "body":body[:600],"raw":raw})
+print(f"[linker] {len(candidates)} candidates",file=sys.stderr)
+
+if not candidates:
+    print("[linker] nothing to link",file=sys.stderr)
+    sys.exit(0)
+
+# 3. One LLM call resolves all
+task_input=[{"slug":c["slug"],"title":c["title"],"deadline":c["deadline"],"body_excerpt":c["body"][:400]} for c in candidates]
+prompt = ("You are a task->goal linker. Match each task to the single best goal slug. "
+          "Return ONLY a JSON object of the form "
+          '{"links":[{"task":"<task_slug>","parent_goal":"<goal_slug or null>","reason":"<one line>"}]}. '
+          "Null parent_goal means no plausible match (orphan).\n\n"
+          "GOALS:\n" + json.dumps(goals,indent=2) + "\n\n"
+          "TASKS:\n" + json.dumps(task_input,indent=2) + "\n\n"
+          "Match rules: prefer weekly goals when task deadline falls in goal date window; "
+          "fall back to monthly; consider tag/topic overlap from titles/bodies. Output JSON only, no prose.")
+
+print(f"[linker] calling LLM on {len(candidates)} tasks...",file=sys.stderr)
+result=subprocess.run([CLAUDE,"--dangerously-skip-permissions","-p"],
+                      input=prompt,capture_output=True,text=True,env=ENV,timeout=300)
+out=result.stdout
+# extract JSON
+m=re.search(r"\{[\s\S]*\}",out)
+if not m:
+    print(f"[linker] LLM returned no JSON:\n{out[:500]}",file=sys.stderr); sys.exit(1)
+try:
+    decisions=json.loads(m.group(0))["links"]
+except Exception as e:
+    print(f"[linker] JSON parse failed: {e}\n{m.group(0)[:500]}",file=sys.stderr); sys.exit(1)
+
+linked=[]; orphans=[]
+by_slug={c["slug"]:c for c in candidates}
+for d in decisions:
+    cand=by_slug.get(d["task"])
+    if not cand: continue
+    if not d.get("parent_goal"):
+        orphans.append({"task":d["task"],"reason":d.get("reason","")})
+        continue
+    pg=d["parent_goal"]
+    m=re.match(r"^---\n(.*?)\n---\n(.*)$",cand["raw"],re.DOTALL)
+    if not m: orphans.append({"task":d["task"],"reason":"frontmatter unparseable"}); continue
+    fm_t,body_t=m.group(1),m.group(2)
+    if re.search(r"^parent_goal:",fm_t,re.M):
+        fm_t=re.sub(r"^parent_goal:.*$",f"parent_goal: {pg}",fm_t,flags=re.M)
+    else:
+        fm_t=fm_t.rstrip()+f"\nparent_goal: {pg}"
+    put_page(d["task"],f"---\n{fm_t}\n---\n{body_t}")
+    linked.append({"task":d["task"],"parent_goal":pg,"reason":d.get("reason","")})
+
+# 4. Report
+lines=[f"---",f"type: report",f"date: $TODAY",f"generator: task-goal-linker v0.2 (LLM)",
+       f"linked: {len(linked)}",f"orphans: {len(orphans)}",f"missing_metadata: {len(missing_meta)}",
+       f"---","",f"# Task ↔ Goal Audit — $TODAY (LLM-resolved)","",
+       f"## Linked ({len(linked)})",""]
+for r in linked: lines.append(f"- [[{r['task']}]] → [[{r['parent_goal']}]] — {r['reason']}")
+lines+=["",f"## Orphans ({len(orphans)})",""]
+for o in orphans: lines.append(f"- [[{o['task']}]] — {o['reason']}")
+lines+=["",f"## Missing metadata ({len(missing_meta)})",""]
+for m in missing_meta: lines.append(f"- [[{m['task']}]] — missing: {', '.join(m['missing'])}")
+put_page(REPORT_SLUG,"\n".join(lines)+"\n")
+print(f"linked={len(linked)} orphans={len(orphans)} missing={len(missing_meta)}")
+PY
+
+printf '{"ts":"%s","event":"completed_v2"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$HEARTBEAT"
