@@ -2,6 +2,14 @@
 
 This is the dispatcher. Skills are the implementation. **Read the skill file before acting.** If two skills could match, read both. They are designed to chain (e.g., ingest then enrich for each entity).
 
+## Meta-rule (always read first)
+
+Any work that creates a new skill OR modifies an existing skill (`skills/*/SKILL.md`, `scripts/<slug>.*`, or the runner at `~/.gbrain/integrations/<slug>/run.sh`) triggers **`/skillify` first**. The skillify skill is the 11-item completeness gate; bypassing it ships partial skills.
+
+After the change, the pre-commit hook (`scripts/git-hooks/pre-commit`) runs `gbrain skillify check skills/<slug>/` and rejects the commit if the verdict is not `properly skilled`. Install the hook once per clone: `bash scripts/install-hooks.sh`.
+
+---
+
 ## Always-on (every message)
 
 | Trigger | Skill |

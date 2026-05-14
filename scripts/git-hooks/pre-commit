@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Pre-commit hook: enforce `gbrain skillify check` on staged skills.
+# Portable to bash 3.2 (default macOS /bin/bash).
+
+set -uo pipefail   # no -e: grep with no match is a normal "nothing to do" path
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [[ ! -d "$REPO_ROOT/skills" ]]; then
+  exit 0
+fi
+
+AFFECTED=$(
+  git diff --cached --name-only --diff-filter=ACMR 2>/dev/null \
+    | grep -E '^skills/[^/]+/(SKILL\.md|run\.sh(\.reference)?$|scripts/.*)' \
+    | sed -E 's|^skills/([^/]+)/.*|\1|' \
+    | sort -u
+)
+
+if [[ -z "$AFFECTED" ]]; then
+  exit 0
+fi
+
+export PATH="/opt/homebrew/bin:$PATH"
+
+FAIL=0
+while IFS= read -r slug; do
+  [[ -z "$slug" ]] && continue
+  if [[ ! -d "$REPO_ROOT/skills/$slug" ]]; then
+    continue
+  fi
+  echo "[pre-commit] skillify-check skills/$slug/..."
+  CHECK_OUT=$(bun run "$REPO_ROOT/scripts/skillify-check.ts" "skills/$slug/" 2>&1)
+  echo "$CHECK_OUT" > "/tmp/.skillify-pre-commit-$slug.log"
+  if ! echo "$CHECK_OUT" | grep -qE '→ properly skilled'; then
+    echo ""
+    echo "[pre-commit] ❌ skills/$slug/ is NOT properly skilled."
+    echo "$CHECK_OUT" | tail -15
+    echo "    See /tmp/.skillify-pre-commit-$slug.log for full report."
+    FAIL=1
+  fi
+done <<< "$AFFECTED"
+
+if [[ $FAIL -ne 0 ]]; then
+  echo ""
+  echo "[pre-commit] Commit rejected. Run /skillify on the affected skills."
+  echo "    Bypass with --no-verify ONLY if explicitly authorized."
+  exit 1
+fi
+
+echo "[pre-commit] ✓ all affected skills are properly skilled."
+exit 0
