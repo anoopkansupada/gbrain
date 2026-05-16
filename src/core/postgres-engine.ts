@@ -321,6 +321,8 @@ export class PostgresEngine implements BrainEngine {
       ingest_log_source_id_exists: boolean;
       facts_exists: boolean;
       facts_row_num_exists: boolean;
+      oauth_clients_exists: boolean;
+      oauth_clients_source_id_exists: boolean;
     }[]>`
       SELECT
         EXISTS (SELECT 1 FROM information_schema.tables
@@ -362,7 +364,11 @@ export class PostgresEngine implements BrainEngine {
         EXISTS (SELECT 1 FROM information_schema.tables
                 WHERE table_schema = current_schema() AND table_name = 'facts') AS facts_exists,
         EXISTS (SELECT 1 FROM information_schema.columns
-                WHERE table_schema = current_schema() AND table_name = 'facts' AND column_name = 'row_num') AS facts_row_num_exists
+                WHERE table_schema = current_schema() AND table_name = 'facts' AND column_name = 'row_num') AS facts_row_num_exists,
+        EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema = current_schema() AND table_name = 'oauth_clients') AS oauth_clients_exists,
+        EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema() AND table_name = 'oauth_clients' AND column_name = 'source_id') AS oauth_clients_source_id_exists
     `;
     const probe = probeRows[0]!;
 
@@ -396,11 +402,17 @@ export class PostgresEngine implements BrainEngine {
     // source_markdown_slug. Old brains have facts without these columns; bootstrap
     // adds them before SCHEMA_SQL replay creates the index.
     const needsFactsFenceColumns = probe.facts_exists && !probe.facts_row_num_exists;
+    // v0.34.1.0 (v60-v61): idx_oauth_clients_source_id and
+    // idx_oauth_clients_federated_read in SCHEMA_SQL reference source_id and
+    // federated_read. Old brains have oauth_clients without these columns;
+    // bootstrap adds them before SCHEMA_SQL replay creates the indexes.
+    const needsOauthClientsV60 = probe.oauth_clients_exists && !probe.oauth_clients_source_id_exists;
 
     if (!needsPagesBootstrap && !needsLinksBootstrap && !needsChunksBootstrap
         && !needsPagesDeletedAt && !needsMcpLogBootstrap && !needsSubagentProviderId
         && !needsChunksEmbeddingImage && !needsPagesRecency
-        && !needsIngestLogSourceId && !needsFactsFenceColumns) return;
+        && !needsIngestLogSourceId && !needsFactsFenceColumns
+        && !needsOauthClientsV60) return;
 
     console.log('  Pre-v0.21 brain detected, applying forward-reference bootstrap');
 
@@ -526,6 +538,30 @@ export class PostgresEngine implements BrainEngine {
       // so the index can build cleanly.
       await conn.unsafe(`
         ALTER TABLE ingest_log ADD COLUMN IF NOT EXISTS source_id TEXT NOT NULL DEFAULT 'default';
+      `);
+    }
+
+    if (needsFactsFenceColumns) {
+      // v51 (facts_fence_columns) adds row_num + source_markdown_slug +
+      // idx_facts_fence_key partial unique index. SCHEMA_SQL's
+      // CREATE UNIQUE INDEX (source_id, source_markdown_slug, row_num)
+      // crashes without these columns. v51 runs later via runMigrations and
+      // is idempotent.
+      await conn.unsafe(`
+        ALTER TABLE facts ADD COLUMN IF NOT EXISTS row_num              INTEGER;
+        ALTER TABLE facts ADD COLUMN IF NOT EXISTS source_markdown_slug TEXT;
+      `);
+    }
+
+    if (needsOauthClientsV60) {
+      // v60 (oauth_clients_source_id_fk) adds source_id; v61
+      // (oauth_clients_federated_read_column) adds federated_read. SCHEMA_SQL's
+      // CREATE INDEX idx_oauth_clients_source_id and
+      // idx_oauth_clients_federated_read crash without these columns.
+      // v60-v65 run later via runMigrations and are idempotent.
+      await conn.unsafe(`
+        ALTER TABLE oauth_clients ADD COLUMN IF NOT EXISTS source_id      TEXT;
+        ALTER TABLE oauth_clients ADD COLUMN IF NOT EXISTS federated_read TEXT[] NOT NULL DEFAULT '{}';
       `);
     }
   }

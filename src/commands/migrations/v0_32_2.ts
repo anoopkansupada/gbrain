@@ -106,7 +106,7 @@ interface LegacyFactRow {
   fact: string;
   kind: 'event' | 'preference' | 'commitment' | 'belief' | 'fact';
   visibility: 'private' | 'world';
-  notability: 'high' | 'medium' | 'low';
+  notability: 'high' | 'medium' | 'low' | null;
   context: string | null;
   valid_from: Date;
   valid_until: Date | null;
@@ -200,7 +200,8 @@ async function phaseBFenceFacts(
     // Walk legacy rows in (source_id, entity_slug) groups for per-page
     // atomic writes.
     const legacy = await engine.executeRaw<LegacyFactRow>(
-      `SELECT id, source_id, entity_slug, fact, kind, visibility, notability,
+      `SELECT id, source_id, entity_slug, fact, kind, visibility,
+              NULL::text AS notability,
               context, valid_from, valid_until, source, confidence
          FROM facts
         WHERE row_num IS NULL
