@@ -222,7 +222,7 @@ export async function runThink(
   if (opts.stubResponse) {
     response = opts.stubResponse;
   } else {
-    if (!opts.client && !process.env.ANTHROPIC_API_KEY) {
+    if (!opts.client && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
       warnings.push('NO_ANTHROPIC_API_KEY');
       // Degrade gracefully: return the gather without synthesis. Better than throwing.
       return {
@@ -245,7 +245,7 @@ export async function runThink(
       };
     }
     // Anthropic SDK exposes the create method via .messages — match the structural signature.
-    const realClient = new Anthropic();
+    const realClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? null, authToken: process.env.ANTHROPIC_AUTH_TOKEN ?? null });
     const client: ThinkLLMClient = opts.client ?? {
       create: (params, opts2) => realClient.messages.create(params, opts2),
     };

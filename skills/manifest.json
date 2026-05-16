@@ -202,7 +202,7 @@
     {
       "name": "cold-start",
       "path": "cold-start/SKILL.md",
-      "description": "Day-one brain bootstrapping: sequence the highest-leverage data sources (contacts, calendar, email, conversations, social, archives) to go from empty brain to useful brain. Uses ClawVisor for safe credential handling — agents never hold raw API keys."
+      "description": "Day-one brain bootstrapping: sequence the highest-leverage data sources (contacts, calendar, email, conversations, social, archives) to go from empty brain to useful brain. Uses ClawVisor for safe credential handling \u2014 agents never hold raw API keys."
     },
     {
       "name": "ask-user",
@@ -213,6 +213,21 @@
       "name": "functional-area-resolver",
       "path": "functional-area-resolver/SKILL.md",
       "description": "Compress an agent's routing file (RESOLVER.md or AGENTS.md) by replacing skill-per-row tables with functional-area dispatcher entries. Two-layer dispatch keeps every sub-skill reachable at ~50% of the file size."
+    },
+    {
+      "name": "call-brief-generator",
+      "path": "call-brief-generator/SKILL.md",
+      "description": "Generate pre-call brief deterministically from CRM dealbook, brain context, and conference history. Outputs canonical markdown + rendered HTML."
+    },
+    {
+      "name": "post-call-processor",
+      "path": "post-call-processor/SKILL.md",
+      "description": "After a Granola transcript lands and matches a pre-call brief, link the two, extract structured facts, create task pages, and draft a follow-up email."
+    },
+    {
+      "name": "nct-goals",
+      "path": "nct-goals/SKILL.md",
+      "description": "Generate, validate, and maintain NCT-shaped goal pages (Narrative, Commitments, Tasks) in gbrain."
     }
   ],
   "dependencies": {

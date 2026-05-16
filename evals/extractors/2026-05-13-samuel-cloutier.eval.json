@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "description": "Ground truth for 10-extractor system on Samuel Cloutier intro call (2026-05-13). Note: Granola recording stopped ~10 min in; Walkers UK referrer correction, Windhelm lost-stage, Sarah Marfire/Aaron Unterman competitor names, Isabel/Rishma/Prabha CIMA contacts, and VASP article title pivot are off-record. This eval covers only facts present in the captured transcript.",
+  "meeting_slug": "2026-05-13-samuel-cloutier",
+  "transcript_path": "~/brain/meetings/2026-05-13-samuel-cloutier.md",
+  "off_record_facts": [
+    "Walkers UK (Melissa Lim) as Cashi referrer — correction of 'Walkers Corporate' in CRM",
+    "Windhelm Finance = Lost stage (CRM shows Pricing sent)",
+    "Paxos referral via Petri not McVey",
+    "Sarah Marfire and Aaron Unterman as named competitors",
+    "Isabel (CIMA VASP head), Rishma, Prabha as CIMA personal contacts Sam offered",
+    "VASP article title pivot to 'What's in the Pipeline'"
+  ],
+  "assertions": [
+    {
+      "id": "sam-deals-lunar-rails",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Lunar Rails identified as active VASP deal",
+      "transcript_quote": "I have lunar rails and cache",
+      "check": "JSON contains an entry for 'Lunar Rails' (or 'lunar-rails') as an active or existing VASP/deal"
+    },
+    {
+      "id": "sam-deals-cashy",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Cashy (or Cashi) identified as active VASP deal",
+      "transcript_quote": "I have lunar rails and cache",
+      "check": "JSON contains an entry for 'Cashy' or 'Cashi' as an active or existing VASP/deal"
+    },
+    {
+      "id": "sam-deals-vasp-prospect-lending",
+      "extractor": "extract-deals",
+      "severity": "high",
+      "description": "Unnamed third VASP prospect (lending solution) identified",
+      "transcript_quote": "I have one now that's providing kind of a lending solution",
+      "check": "JSON contains a third VASP entry described as a lending solution or prospect"
+    },
+    {
+      "id": "sam-pricing-40k-base",
+      "extractor": "extract-pricing-signals",
+      "severity": "critical",
+      "description": "VASP pricing base is $40K for 1-2 VASPs",
+      "transcript_quote": "I'm at the 40 level now with the two that I have",
+      "check": "JSON captures a $40,000 base price tier for 1-2 VASPs"
+    },
+    {
+      "id": "sam-pricing-50k-at-3",
+      "extractor": "extract-pricing-signals",
+      "severity": "high",
+      "description": "VASP pricing increases to $50K at 3 VASPs",
+      "transcript_quote": "I might switch to 50. And once I hit three",
+      "check": "JSON captures a $50,000 price tier at or around 3 VASPs"
+    },
+    {
+      "id": "sam-pricing-65k",
+      "extractor": "extract-pricing-signals",
+      "severity": "high",
+      "description": "VASP pricing at 5 VASPs = $65K",
+      "transcript_quote": "if I hit 45 vasps, I think if I go up to 60, 65k",
+      "check": "JSON captures a $60K-$65K price tier at 4-5 VASPs"
+    },
+    {
+      "id": "sam-pricing-100k",
+      "extractor": "extract-pricing-signals",
+      "severity": "high",
+      "description": "VASP pricing at 8-9 VASPs = $100K",
+      "transcript_quote": "if I hit eight nine, I'm gonna get 100K",
+      "check": "JSON captures a $100,000 price tier at 8-9 VASPs"
+    },
+    {
+      "id": "sam-action-vasp-list",
+      "extractor": "extract-action-items",
+      "severity": "critical",
+      "description": "Sam commits to sending list of 24 CIMA-registered VASPs",
+      "transcript_quote": "I'm gonna send you the list of vasps that are regulated in Kmat. There's 24 of them.",
+      "check": "JSON contains an action item owned by the counterparty (Sam) to send a list of 24 CIMA-regulated VASPs"
+    },
+    {
+      "id": "sam-action-vasp-research",
+      "extractor": "extract-action-items",
+      "severity": "high",
+      "description": "Anoop to research the 24 VASPs / source leads from VASP market",
+      "transcript_quote": "you probably have a hit list of companies that you've looked at",
+      "check": "JSON contains an action item owned by the operator (Anoop) to research VASPs or build a hit list"
+    },
+    {
+      "id": "sam-icp-uk-license",
+      "extractor": "extract-intent-signals",
+      "severity": "critical",
+      "description": "ICP: UK-license veterans exiting to Cayman are prime VASP prospects",
+      "transcript_quote": "Lots of exodus from the UK. If you hear we're in crypto, we applied for UK license. It was hell. Boom. That's target.",
+      "check": "JSON captures UK-licensed crypto firms expanding to Cayman as a target ICP segment"
+    },
+    {
+      "id": "sam-icp-dubai",
+      "extractor": "extract-intent-signals",
+      "severity": "high",
+      "description": "ICP: Dubai-regulated firms expanding to North American markets",
+      "transcript_quote": "oh, we have a license in Dubai. You know, time zones making it hard. We want to expand North American markets. Target.",
+      "check": "JSON captures Dubai-licensed firms as a target ICP segment"
+    },
+    {
+      "id": "sam-icp-money-transmitter",
+      "extractor": "extract-intent-signals",
+      "severity": "high",
+      "description": "ICP: Money transmitter licenses expanding Caribbean/LATAM",
+      "transcript_quote": "any kind of money transmitter license that wants to expand in, like, caribbean, South America",
+      "check": "JSON captures money transmitter licenses expanding to Caribbean/LATAM as a target segment"
+    },
+    {
+      "id": "sam-anti-icp-daos-gaming",
+      "extractor": "extract-intent-signals",
+      "severity": "high",
+      "description": "Anti-ICP: DAOs, gaming, degen projects should go to Josh",
+      "transcript_quote": "Josh is the kind of DAO slash gaming slash. Dare I say degen... And I do not.",
+      "check": "JSON captures DAOs/gaming/degen as anti-ICP (route to Josh) or excluded segment for Sam"
+    },
+    {
+      "id": "sam-vasp-max-capacity",
+      "extractor": "extract-intent-signals",
+      "severity": "medium",
+      "description": "Sam's capacity ceiling is ~10 VASPs; not building a large desk",
+      "transcript_quote": "Ideally, I would have seven regulated vasps on my desk, eight, nine, 10. 10 is my max.",
+      "check": "JSON notes Sam's stated capacity ceiling of 10 VASPs"
+    },
+    {
+      "id": "sam-personal-sick-from-trip",
+      "extractor": "extract-personal-context",
+      "severity": "medium",
+      "description": "Sam was ill with a viral cold after returning from a conference trip",
+      "transcript_quote": "I got killed with sickness yesterday. Full day out with just, like, daggers in my throat.",
+      "check": "JSON notes Sam was sick/had a viral cold following a conference trip"
+    },
+    {
+      "id": "sam-insider-wrote-legislation",
+      "extractor": "extract-insider-knowledge",
+      "severity": "critical",
+      "description": "Sam wrote the Cayman VASP legislation and spent 7 years inside the Ministry of Financial Services",
+      "transcript_quote": "I wrote the legislation. I spent seven years working with the regulator. You know, if I know every single person there.",
+      "check": "JSON captures that Sam authored the Cayman VASP legislation and has deep regulatory insider access"
+    },
+    {
+      "id": "sam-insider-vasp-market-size",
+      "extractor": "extract-insider-knowledge",
+      "severity": "high",
+      "description": "Only 24-40 VASP registrations exist in Cayman; Sam holds ~7% of the market with 2 clients",
+      "transcript_quote": "there might be 30 entities. 40 in the jurisdiction. So I've got two right now.",
+      "check": "JSON captures the market size fact: ~30-40 total VASP registrations in Cayman, Sam has 2"
+    }
+  ]
+}

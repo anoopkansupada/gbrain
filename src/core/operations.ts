@@ -981,7 +981,9 @@ const list_pages: Operation = {
   params: {
     type: { type: 'string', description: 'Filter by page type' },
     tag: { type: 'string', description: 'Filter by tag' },
-    limit: { type: 'number', description: 'Max results (default 50)' },
+    limit: { type: 'number', description: 'Max results (default 50, max 1000). Use with offset for pagination.' },
+    // v0.31.3-local-patch: surface offset for paginating large result sets (e.g. cockpit fetching all type=company pages, ~4750 rows). PageFilters.offset already supported by engines.
+    offset: { type: 'number', description: 'Skip first N results for pagination (default 0).' },
     // v0.29 — surface filter that already exists on PageFilters.
     updated_after: {
       type: 'string',
@@ -993,6 +995,8 @@ const list_pages: Operation = {
       description: 'Sort order. Default updated_desc (matches pre-v0.29). Options: updated_desc, updated_asc, created_desc, slug.',
     },
     include_deleted: { type: 'boolean', description: 'v0.26.5: include soft-deleted pages (default: false). Used by restore workflows and operator diagnostics.' },
+    // v0.31.3-local-patch: opt-in inline frontmatter+tags so cockpit can filter without N follow-up get_page calls.
+    include_frontmatter: { type: 'boolean', description: 'v0.31.3-local-patch: include frontmatter object and tags array on each row (default: false for payload-size backwards compat).' },
   },
   handler: async (ctx, p) => {
     // Whitelist the sort enum at the handler before passing to the engine.
@@ -1011,18 +1015,29 @@ const list_pages: Operation = {
     const pages = await ctx.engine.listPages({
       type: p.type as any,
       tag: p.tag as string,
-      limit: clampSearchLimit(p.limit as number | undefined, 50, 100),
+      // v0.31.3-local-patch: raised cap from 100 -> 1000 so cockpit can page in chunks of 500.
+      limit: clampSearchLimit(p.limit as number | undefined, 50, 1000),
+      offset: typeof p.offset === 'number' && p.offset >= 0 ? Math.floor(p.offset) : 0,
       includeDeleted: (p.include_deleted as boolean) === true,
       updated_after: typeof p.updated_after === 'string' ? p.updated_after : undefined,
       sort,
       ...scope,
     });
+    // v0.31.3-local-patch: optionally enrich rows with frontmatter+tags. Engine already returns frontmatter on Page;
+    // tags require a per-slug fetch (no batch method on engine interface yet, opt-in only).
+    const includeFrontmatter = (p.include_frontmatter as boolean) === true;
+    const tagsBySlug: Record<string, string[]> = {};
+    if (includeFrontmatter) {
+      const results = await Promise.all(pages.map(pg => ctx.engine.getTags(pg.slug).then(t => [pg.slug, t] as const)));
+      for (const [slug, tags] of results) tagsBySlug[slug] = tags;
+    }
     return pages.map(pg => ({
       slug: pg.slug,
       type: pg.type,
       title: pg.title,
       updated_at: pg.updated_at,
       ...(pg.deleted_at ? { deleted_at: pg.deleted_at } : {}),
+      ...(includeFrontmatter ? { frontmatter: pg.frontmatter ?? {}, tags: tagsBySlug[pg.slug] ?? [] } : {}),
     }));
   },
   scope: 'read',

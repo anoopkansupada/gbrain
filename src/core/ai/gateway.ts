@@ -1586,9 +1586,21 @@ function instantiateExpansion(recipe: Recipe, modelId: string, cfg: AIGatewayCon
       return createGoogleGenerativeAI({ apiKey }).languageModel(modelId);
     }
     case 'native-anthropic': {
+      // OAuth subscription token (sk-ant-oat01-*) → Bearer auth with Claude Code beta header.
+      // API key (sk-ant-api*) → standard x-api-key.
+      const oauth = cfg.env.CLAUDE_CODE_OAUTH_TOKEN;
       const apiKey = cfg.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new AIConfigError(`Anthropic expansion requires ANTHROPIC_API_KEY.`, recipe.setup_hint);
-      return createAnthropic({ apiKey }).languageModel(modelId);
+      if (!oauth && !apiKey) throw new AIConfigError(
+        `Anthropic expansion requires ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.`,
+        recipe.setup_hint,
+      );
+      const client = oauth
+        ? createAnthropic({
+            authToken: oauth,
+            headers: { "anthropic-beta": "oauth-2025-04-20" },
+          } as any)
+        : createAnthropic({ apiKey });
+      return client.languageModel(modelId);
     }
     case 'openai-compatible': {
       // D12=A: unified auth via Recipe.resolveAuth (or default).
@@ -1789,9 +1801,21 @@ function instantiateChat(recipe: Recipe, modelId: string, cfg: AIGatewayConfig):
       return createGoogleGenerativeAI({ apiKey }).languageModel(modelId);
     }
     case 'native-anthropic': {
+      // OAuth subscription token (sk-ant-oat01-*) → Bearer auth with Claude Code beta header.
+      // API key (sk-ant-api*) → standard x-api-key.
+      const oauth = cfg.env.CLAUDE_CODE_OAUTH_TOKEN;
       const apiKey = cfg.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new AIConfigError(`Anthropic chat requires ANTHROPIC_API_KEY.`, recipe.setup_hint);
-      return createAnthropic({ apiKey }).languageModel(modelId);
+      if (!oauth && !apiKey) throw new AIConfigError(
+        `Anthropic chat requires ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.`,
+        recipe.setup_hint,
+      );
+      const client = oauth
+        ? createAnthropic({
+            authToken: oauth,
+            headers: { "anthropic-beta": "oauth-2025-04-20" },
+          } as any)
+        : createAnthropic({ apiKey });
+      return client.languageModel(modelId);
     }
     case 'openai-compatible': {
       // D12=A: unified auth via Recipe.resolveAuth (or default).

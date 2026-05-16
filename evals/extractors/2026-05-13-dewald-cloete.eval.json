@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "description": "Ground truth for 10-extractor system on Dewald Cloete intro call (2026-05-13). Dewald leads registered office services and is developing the private wealth / family office practice.",
+  "meeting_slug": "2026-05-13-dewald-cloete",
+  "transcript_path": "~/brain/meetings/2026-05-13-dewald-cloete.md",
+  "assertions": [
+    {
+      "id": "dewald-deals-vaultfyi",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Vault.fyi (DeFi yield protocol) in onboarding — met at DAS NY, referred by Ogier, also contacted Harness and Leeward",
+      "transcript_quote": "bumped into the guy at Das New York... he's friends with the monad guys... they already work with ojer on island and oja highly recommended they use harness... And they're also reached out to leeward",
+      "check": "JSON contains an entry for 'Vault.fyi' or 'vaults.fyi' as an active onboarding deal; mentions Ogier as the referrer and Harness/Leeward as competing contacts"
+    },
+    {
+      "id": "dewald-deals-plume-lost",
+      "extractor": "extract-deals",
+      "severity": "high",
+      "description": "Plume (RWA gold storage) is a lost deal — at Horizons; ops manager (squash friend) tried to refer but in-house counsel blocked",
+      "transcript_quote": "They won't move because they're currently with horizons... they got in-house legal counsel and the in-house from local cayman law firm. And the in-house legal counsel said they'll just sit as the supervisor",
+      "check": "JSON contains a 'Plume' entry as lost, currently with Horizons, blocked by in-house counsel"
+    },
+    {
+      "id": "dewald-deals-nxt-lost",
+      "extractor": "extract-deals",
+      "severity": "medium",
+      "description": "NXT Private Wealth: prospect that referred itself but then used a friend on island instead",
+      "transcript_quote": "NXT private wealth, that was just, they said, oh, they were going to make intros to us... he's got a mate on island who will do that for him",
+      "check": "JSON contains 'NXT Private Wealth' or 'Next Private Wealth' as a lost deal — prospect used a personal contact instead"
+    },
+    {
+      "id": "dewald-pricing-ro-year1",
+      "extractor": "extract-pricing-signals",
+      "severity": "critical",
+      "description": "Registered office fee: $1,500 in year 1 (reduced onboarding), $7,500 from year 2 onwards (all-inclusive)",
+      "transcript_quote": "that is just sort of when it comes in comes in, it's, it 1500 in the first year, $7,500 in the second year",
+      "check": "JSON captures RO pricing at $1,500 (year 1) and $7,500 (year 2+) as an all-inclusive fixed fee"
+    },
+    {
+      "id": "dewald-pricing-director-fee",
+      "extractor": "extract-pricing-signals",
+      "severity": "high",
+      "description": "Director fee range: $13K-$18K in year 1",
+      "transcript_quote": "they're between, I want to say. Like 13 or 14 and 18 for the first year",
+      "check": "JSON captures director fee in the $13K-$18K range for year 1"
+    },
+    {
+      "id": "dewald-referrer-ogier",
+      "extractor": "extract-referrer-network",
+      "severity": "critical",
+      "description": "Ogier (Cayman law firm) referred Vault.fyi to Hash — they recommended both Hash and Harness",
+      "transcript_quote": "they already work with ojer on island and oja highly recommended they use harness",
+      "check": "JSON identifies Ogier as the referrer for Vault.fyi; notes Ogier also recommended Harness (dual-referral)"
+    },
+    {
+      "id": "dewald-competitor-harness",
+      "extractor": "extract-competitor-mentions",
+      "severity": "critical",
+      "description": "Harness: competitor, not crypto-native, trying to enter the space; Vault.fyi was referred to them by Ogier",
+      "transcript_quote": "Harness is not crypto native. They didn't really understand the industry. I mean, they are trying to get into it",
+      "check": "JSON identifies Harness as a named competitor with the weakness of not being crypto-native"
+    },
+    {
+      "id": "dewald-competitor-leeward-500",
+      "extractor": "extract-competitor-mentions",
+      "severity": "high",
+      "description": "Leeward: named competitor — 'one guy sits on 500 entities' cited as the contrast/weakness",
+      "transcript_quote": "one guy sits on 500 funds or 500 entities. So I mean, if you want proper attention. I don't know if that's the best option",
+      "check": "JSON identifies Leeward as a named competitor with the 500-entities-per-director weakness"
+    },
+    {
+      "id": "dewald-competitor-horizons",
+      "extractor": "extract-competitor-mentions",
+      "severity": "high",
+      "description": "Horizons: named competitor holding Plume — 'very good, they know what they're doing'",
+      "transcript_quote": "They won't move because they're currently with horizons. Rises is very good. They know what they're doing.",
+      "check": "JSON identifies Horizons as a named competitor holding the Plume account; stance is 'positive/strong' (hard to displace)"
+    },
+    {
+      "id": "dewald-action-vaultfyi-onboarding",
+      "extractor": "extract-action-items",
+      "severity": "critical",
+      "description": "Dewald to complete Vault.fyi onboarding (documents being signed, no follow-up meeting yet)",
+      "transcript_quote": "we're in the process of signing all the documents and getting everything done... Haven't actually had a follow up meeting with him",
+      "check": "JSON contains an action item for Dewald to schedule a follow-up meeting with Vault.fyi and complete onboarding"
+    },
+    {
+      "id": "dewald-personal-private-wealth-background",
+      "extractor": "extract-personal-context",
+      "severity": "high",
+      "description": "Dewald's first job was private wealth management; has deep understanding of tax law and family office structures",
+      "transcript_quote": "give you background. My first job was private wealth management... I am extremely good compared to the rest of my peers at taxes and understanding like tax law.",
+      "check": "JSON captures Dewald's private wealth / tax law background as a differentiating personal credential"
+    },
+    {
+      "id": "dewald-personal-family-office-contact",
+      "extractor": "extract-personal-context",
+      "severity": "high",
+      "description": "Wife's best friend = 5-generation family office; father has Miami hospital and college named after him; attends elite hedge fund annual family office conference",
+      "transcript_quote": "my wife's best friend, we travel around the world with them, the dad. Is a hospital in Miami is named after them. The college is named after them... he sits at the main table every year",
+      "check": "JSON captures Dewald's access to ultra-HNWI family office network through wife's best friend's family"
+    },
+    {
+      "id": "dewald-insider-plume-squash",
+      "extractor": "extract-insider-knowledge",
+      "severity": "critical",
+      "description": "SENSITIVE: Dewald plays squash weekly with Plume's ops manager who is trying to refer Plume to Hash but is blocked by in-house counsel",
+      "transcript_quote": "I'm mates with this guy. The operations manager. I make sure I play squash with him once a week.",
+      "check": "JSON captures the Plume ops manager / squash relationship as an insider warm path; tagged appropriately for internal use only"
+    },
+    {
+      "id": "dewald-correction-private-wealth-nascent",
+      "extractor": "extract-corrections",
+      "severity": "high",
+      "description": "Correction: Hash's private wealth practice only started 'a few months ago' — not a mature product line yet",
+      "transcript_quote": "it's only been a few months that we decided we're going to do this because I previously worked with private wealth",
+      "check": "JSON captures that private wealth is a newly launched practice (few months old), correcting any assumption it's an established service area"
+    },
+    {
+      "id": "dewald-insider-monad-reference",
+      "extractor": "extract-insider-knowledge",
+      "severity": "medium",
+      "description": "Dewald used Monad, Arbitrum, Stacks, and Arkham as credibility references to Vault.fyi (these are real Hash clients he named)",
+      "transcript_quote": "I sit on arbitrim. I'm in the process of being put on as an alternate for stacks. And then I set an arkham intelligence... he was very impressed",
+      "check": "JSON captures Monad/Arbitrum/Stacks/Arkham as credibility-building reference clients Dewald deployed in the Vault.fyi pitch"
+    }
+  ]
+}

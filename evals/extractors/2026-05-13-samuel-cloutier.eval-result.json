@@ -1,0 +1,64 @@
+{
+  "meeting_slug": "2026-05-13-samuel-cloutier",
+  "eval_version": 1,
+  "run_at": "2026-05-14T05:00:00Z",
+  "overall_score": 1.0,
+  "weighted_score": "28.0 / 28.0",
+  "wall_time": {
+    "fan_out_minutes": 4.1,
+    "merger_seconds": 17,
+    "total_minutes": 4.4
+  },
+  "per_extractor": {
+    "extract-deals": {"score": 1.0, "assertions_total": 3, "captured": 3, "partial": 0, "missed": 0},
+    "extract-pricing-signals": {"score": 1.0, "assertions_total": 4, "captured": 4, "partial": 0, "missed": 0},
+    "extract-action-items": {"score": 1.0, "assertions_total": 2, "captured": 2, "partial": 0, "missed": 0},
+    "extract-intent-signals": {"score": 1.0, "assertions_total": 5, "captured": 5, "partial": 0, "missed": 0},
+    "extract-personal-context": {"score": 1.0, "assertions_total": 1, "captured": 1, "partial": 0, "missed": 0},
+    "extract-insider-knowledge": {"score": 1.0, "assertions_total": 2, "captured": 2, "partial": 0, "missed": 0},
+    "extract-competitor-mentions": {"score": null, "assertions_total": 0, "note": "Correctly empty — no competitors named in recorded transcript"},
+    "extract-referrer-network": {"score": null, "assertions_total": 0, "note": "Correctly empty — referrer facts (Walkers UK etc.) were off-record"},
+    "extract-corrections": {"score": null, "assertions_total": 0, "note": "Eval assertions excluded (off-record corrections); corrections.json surfaced 5 CRM fixes autonomously"},
+    "extract-relationship-graph": {"score": null, "assertions_total": 0, "note": "No direct eval assertions; output included 7 entities: Dewald, Josh, Lunar Rails, Cashy, OKX, CIMA, Consensus Miami"}
+  },
+  "results": [
+    {"id": "sam-deals-lunar-rails", "extractor": "extract-deals", "severity": "critical", "verdict": "CAPTURED", "evidence": "\"deal_name\": \"Lunar Rails\", \"stage_stated\": \"Won\", key_quote verbatim from transcript"},
+    {"id": "sam-deals-cashy", "extractor": "extract-deals", "severity": "critical", "verdict": "CAPTURED", "evidence": "\"deal_name\": \"Cashy\", \"stage_stated\": \"Won\", intel: 'Anoop had flagged Cashy as a prospect without knowing Sam already manages it'"},
+    {"id": "sam-deals-vasp-prospect-lending", "extractor": "extract-deals", "severity": "high", "verdict": "CAPTURED", "evidence": "\"Unnamed lending VASP\" with lending solution category, stage_correction_needed: true (brief inconsistency flagged)"},
+    {"id": "sam-pricing-40k-base", "extractor": "extract-pricing-signals", "severity": "critical", "verdict": "CAPTURED", "evidence": "{trigger: '1–2 VASPs (current)', price_usd: 40000}"},
+    {"id": "sam-pricing-50k-at-3", "extractor": "extract-pricing-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "{trigger: '3 VASPs', price_usd: 50000}"},
+    {"id": "sam-pricing-65k", "extractor": "extract-pricing-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "{trigger: '5 VASPs', price_usd: 62500} — interpolated midpoint of garbled '$60, 65k' in transcript", "notes": "Extractor chose 62,500 midpoint; actual quote was ambiguous ('45 vasps' = likely '4-5 VASPs'). Acceptable."},
+    {"id": "sam-pricing-100k", "extractor": "extract-pricing-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "{trigger: '8–9 VASPs', price_usd: 100000}"},
+    {"id": "sam-action-vasp-list", "extractor": "extract-action-items", "severity": "critical", "verdict": "CAPTURED", "evidence": "\"Send list of 24 CIMA-regulated VASPs to Anoop\", owner: [[people/samuel-cloutier]], owner_role: counterparty, bilateral_pair linked"},
+    {"id": "sam-action-vasp-research", "extractor": "extract-action-items", "severity": "high", "verdict": "CAPTURED", "evidence": "\"Research CIMA-regulated VASP list and create prospect summaries\", owner: [[people/anoop-kansupada]], bilateral_pair linked back to Sam's commitment"},
+    {"id": "sam-icp-uk-license", "extractor": "extract-intent-signals", "severity": "critical", "verdict": "CAPTURED", "evidence": "icp_criteria includes 'UK VASP license applicant frustrated by UK regulatory process (it was hell)'"},
+    {"id": "sam-icp-dubai", "extractor": "extract-intent-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "icp_criteria includes 'Dubai-licensed entity wanting to expand into North American markets'"},
+    {"id": "sam-icp-money-transmitter", "extractor": "extract-intent-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "icp_criteria includes 'Money transmitter wanting Caribbean or South American coverage'"},
+    {"id": "sam-anti-icp-daos-gaming", "extractor": "extract-intent-signals", "severity": "high", "verdict": "CAPTURED", "evidence": "anti_icp signal with 'DAO structures', 'Gaming / play-to-earn', 'Degen / unregulated DeFi', next_action: 'Never route DAO, gaming, or degen leads to Sam'"},
+    {"id": "sam-vasp-max-capacity", "extractor": "extract-intent-signals", "severity": "medium", "verdict": "CAPTURED", "evidence": "expansion_intent signal: '10 is my max. At 10, I'm like, oh, I'm good'"},
+    {"id": "sam-personal-sick-from-trip", "extractor": "extract-personal-context", "severity": "medium", "verdict": "CAPTURED", "evidence": "'Got sick with a severe viral cold/sore throat after a recent trip'; next_call_hook generated"},
+    {"id": "sam-insider-wrote-legislation", "extractor": "extract-insider-knowledge", "severity": "critical", "verdict": "CAPTURED", "evidence": "'Samuel personally authored the Cayman VASP legislation and spent seven years working inside CIMA'"},
+    {"id": "sam-insider-vasp-market-size", "extractor": "extract-insider-knowledge", "severity": "high", "verdict": "CAPTURED", "evidence": "'There are currently only 24 regulated VASPs registered with CIMA in Cayman (out of an estimated 30–40 total)'"}
+  ],
+  "missed_critical": [],
+  "bonus_outputs_not_in_eval": [
+    "corrections.json: 5 CRM fixes (Cashy entity type, VASP count 30-40→24, Sam importance Low→High, duplicate page, missing LinkedIn)",
+    "relationship-graph.json: 7 entities mapped (CIMA, OKX, Consensus Miami, Dewald, Josh, Lunar Rails, Cashy)",
+    "personal-context.json: 12 personal facts (networking philosophy, anchovy pizza analogy, zoom aversion, legislative pride)"
+  ],
+  "off_record_facts": [
+    "Walkers UK (Melissa Lim) as Cashi referrer — correction of 'Walkers Corporate' in CRM",
+    "Windhelm Finance = Lost stage (CRM shows Pricing sent)",
+    "Paxos referral via Petri not McVey",
+    "Sarah Marfire and Aaron Unterman as named competitors",
+    "Isabel (CIMA VASP head), Rishma, Prabha as CIMA personal contacts Sam offered",
+    "VASP article title pivot to 'What's in the Pipeline'"
+  ],
+  "root_cause_of_design_doc_gap": "The 70% depth gap identified on the Samuel call is caused by Granola recording stopping ~10 min into a 45+ min conversation. All 6 'missed' facts from the design doc were in the unrecorded portion. The extractor system captured 100% of what was in the transcript. Fix: ensure Granola records full session before next calls.",
+  "recommendations": [
+    "Fix Granola recording to capture full call — this is the only remaining gap",
+    "No prompt tuning needed for extractors on this transcript",
+    "Run eval against Joshua, Dewald, Akshit extractions to confirm consistent coverage",
+    "Update eval assertions for corrections extractor once a call with corrections in the recorded portion is processed"
+  ]
+}

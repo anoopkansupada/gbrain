@@ -23,12 +23,12 @@ tools:
 mutating: true
 writes_pages: true
 writes_to:
-  - briefs/          # status update + post-call section
-  - meetings/        # prep_brief link
-  - tasks/           # new
-  - emails/          # new draft
-  - people/          # service_provider + intel updates
-  - companies/       # service_provider + deal-status updates
+  - briefs/
+  - meetings/
+  - tasks/
+  - emails/
+  - people/
+  - companies/
 ---
 
 # Post-Call Processor
