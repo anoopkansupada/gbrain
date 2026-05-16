@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "description": "Ground truth for 10-extractor system on Joshua Zimmer intro call (2026-05-13). Josh is the top revenue producer at Hash Directors. This call covered referral network mapping and BD strategy.",
+  "meeting_slug": "2026-05-13-joshua-zimmer",
+  "transcript_path": "~/brain/meetings/2026-05-13-joshua-zimmer.md",
+  "assertions": [
+    {
+      "id": "josh-deals-tara-ag",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Tara AG identified as an active deal — RWA project tokenizing US farmland, referred by Mike Katz",
+      "transcript_quote": "terra ag is a rwa project trying to token as far land in the u.s.",
+      "check": "JSON contains an entry for 'Tara AG' or 'Terra AG' as an RWA/real-world-assets deal"
+    },
+    {
+      "id": "josh-deals-cedar",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Cedar (Atlas wallet DAO) identified as active deal with $22K→$30K fee and ongoing founder dispute",
+      "transcript_quote": "cedar. Is a or was a unincorporated DAO in the us they built like a wallet infrastructure called Atlas wallet... the fee is actually pretty good so it's it's 22 but it bumps up to 30",
+      "check": "JSON contains an entry for 'Cedar' as a DAO/foundation with Atlas wallet, $22K-$30K fee, came from TTA/Travers Thorp Alberga"
+    },
+    {
+      "id": "josh-deals-inherited-not-organic",
+      "extractor": "extract-corrections",
+      "severity": "critical",
+      "description": "Correction: deals before Feb 2024 were inherited from departing directors, not Josh's organic wins. Josh joined ~2 years ago when two senior people left.",
+      "transcript_quote": "when I joined. Two other senior people left so I kind of assumed I assumed quite a large number of their respective books",
+      "check": "JSON captures that pre-Feb-2024 deals in Josh's book were inherited, not organically won by Josh — a data correction for referrer/win attribution"
+    },
+    {
+      "id": "josh-lost-plume",
+      "extractor": "extract-deals",
+      "severity": "high",
+      "description": "Plume (RWA, gold storage) is a lost deal — currently with Horizons, in-house counsel blocked the switch",
+      "transcript_quote": "plume, and this is very sensitive information... They won't move because they're currently with horizons... they got in-house legal counsel and the in-house... said they'll just sit as the supervisor",
+      "check": "JSON contains an entry for 'Plume' as a lost deal, currently with Horizons, blocked by in-house counsel"
+    },
+    {
+      "id": "josh-referrer-mike-katz",
+      "extractor": "extract-referrer-network",
+      "severity": "critical",
+      "description": "Mike Katz: NY-based lawyer, has sent multiple deals to Hash, best relationship is with Carl, sent Tara AG",
+      "transcript_quote": "Mike katz has sent us work in the past this it might be the third one that he sent us",
+      "check": "JSON identifies Mike Katz as a multi-deal referrer, NY-based lawyer, with Carl as the primary relationship holder"
+    },
+    {
+      "id": "josh-referrer-tta",
+      "extractor": "extract-referrer-network",
+      "severity": "high",
+      "description": "TTA = Travers Thorp Alberga (Cayman law firm) referred Cedar",
+      "transcript_quote": "So that came from tta actually. TTA. Is that a law firm? Travers throughout alberta so it's the acronym for that it's a law firm in the Cayman Islands",
+      "check": "JSON identifies TTA (Travers Thorp Alberga) as a Cayman law firm that referred Cedar"
+    },
+    {
+      "id": "josh-competitor-leeward",
+      "extractor": "extract-competitor-mentions",
+      "severity": "critical",
+      "description": "Leeward named as primary competitor — Josh worked there before Hash; known for large book sizes ('one guy sits on 500 entities')",
+      "transcript_quote": "you're going to hear them loads and you probably already have I work [at Leeward]... one guy sits on 500 funds or 500 entities",
+      "check": "JSON identifies Leeward as a named competitor with the distinguishing weakness that one director covers 500+ entities (contrast with Hash's attention model)"
+    },
+    {
+      "id": "josh-action-perkins-response",
+      "extractor": "extract-action-items",
+      "severity": "critical",
+      "description": "Josh to respond to Perkins email thread (Anoop saw response come in at start of call)",
+      "transcript_quote": "Do you want me to follow up with that email thread? Because I saw she just responded... I'll. But I definitely want to get them in front of a call",
+      "check": "JSON contains an action item owned by Josh (counterparty) to respond to or follow up with the Perkins email thread"
+    },
+    {
+      "id": "josh-action-master-program-walkthrough",
+      "extractor": "extract-action-items",
+      "severity": "high",
+      "description": "Josh to give Anoop a walkthrough of the master program (proprietary sales tool) — not sent externally",
+      "transcript_quote": "I'll try to jump off at, like, 3 45 and kind of learn that before... I can give I can also give you a 10 minute rundown as well",
+      "check": "JSON contains an action item for Anoop to get a master program walkthrough from Josh"
+    },
+    {
+      "id": "josh-personal-second-child",
+      "extractor": "extract-personal-context",
+      "severity": "high",
+      "description": "Josh and wife Cat expecting second child; first child turns 3 in July",
+      "transcript_quote": "me and cat are expecting our second kid... You'll be three in July",
+      "check": "JSON captures that Josh is expecting a second child with wife Cat; first child turning 3 in July"
+    },
+    {
+      "id": "josh-personal-fat-joe",
+      "extractor": "extract-personal-context",
+      "severity": "medium",
+      "description": "Josh had Fat Joe hold his baby for birth announcement card; people have kept the card for 3 years",
+      "transcript_quote": "the guy who was being shot by him before. Right before this was fat Joe... we sent that out as, like, the birth announcement",
+      "check": "JSON captures the Fat Joe / birth announcement card story as a personal rapport detail"
+    },
+    {
+      "id": "josh-personal-leeward-background",
+      "extractor": "extract-personal-context",
+      "severity": "high",
+      "description": "Josh previously worked at Leeward (Hash's primary competitor) before joining Hash ~2 years ago",
+      "transcript_quote": "I worked at a previous fiduciary firm leeward",
+      "check": "JSON captures that Josh previously worked at Leeward before joining Hash"
+    },
+    {
+      "id": "josh-insider-win-rate",
+      "extractor": "extract-insider-knowledge",
+      "severity": "high",
+      "description": "Josh wins ~70% of clients who get on a master program call — proprietary sales tool is pivotal",
+      "transcript_quote": "I win way more than 50 like probably like 70% of the clients that I get on a call with I'll win it give or take that master program is is pivotal",
+      "check": "JSON captures Josh's ~70% close rate on master program calls as a non-public performance fact"
+    },
+    {
+      "id": "josh-insider-plume-arkham-ops-manager",
+      "extractor": "extract-insider-knowledge",
+      "severity": "critical",
+      "description": "SENSITIVE: Plume and Arkham share an operations manager who doesn't know each company knows he works for the other — intelligence risk",
+      "transcript_quote": "plume and arkham share. An artem intelligence share a operations manager. They don't each other know they know this guy works for a different company",
+      "check": "JSON captures this sensitive fact with do_not_share_externally: true flagged",
+      "confidential": true
+    },
+    {
+      "id": "josh-relationship-scent-advisors",
+      "extractor": "extract-relationship-graph",
+      "severity": "high",
+      "description": "Scent Advisors: India-based, helps foundations/projects with incorporation to filings — like Lemma but doesn't sit on multisigs",
+      "transcript_quote": "So they are a India based... they help facilitate foundations and different projects to spin up their kind of foundation and operations... kind of like lemma but they don't sit on multisigs",
+      "check": "JSON identifies Scent Advisors as a third-party India-based foundation services firm (Lemma-adjacent) worth tracking"
+    }
+  ]
+}

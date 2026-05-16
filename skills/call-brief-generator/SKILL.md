@@ -22,8 +22,8 @@ mutating: true
 writes_pages: true
 writes_to:
   - briefs/
-  - people/        # reciprocal-link append only
-  - companies/     # reciprocal-link append only
+  - people/
+  - companies/
 ---
 
 # Call Brief Generator

@@ -27,6 +27,8 @@ This is the dispatcher. Skills are the implementation. **Read the skill file bef
 | "what search mode", "is my cache hot", "tune my retrieval", "compare search modes", "clear search overrides" | `gbrain search modes/stats/tune` directly. See `skills/conventions/search-modes.md` |
 | "eval results", "search benchmark", "haters-immune methodology", "regression check on retrieval" | `gbrain eval run-all` / `gbrain eval compare`. See `docs/eval/SEARCH_MODE_METHODOLOGY.md` |
 
+| "create goals page", "shape goals as NCT", "reshape goals", "validate goal page", "new month goals", "new week goals" | `skills/nct-goals/SKILL.md` |
+
 ## Call & meeting workflow
 
 | Trigger | Skill |

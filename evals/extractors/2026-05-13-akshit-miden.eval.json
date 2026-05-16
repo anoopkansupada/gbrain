@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "description": "Ground truth for 10-extractor system on Akshit Miden intro call (2026-05-13). Miden is a privacy ZK-L2 protocol spun out of Polygon. Greenfield prospect — no foundation, no tokenomics, no TGE yet.",
+  "meeting_slug": "2026-05-13-akshit-miden",
+  "transcript_path": "~/brain/meetings/2026-05-13-akshit-miden.md",
+  "assertions": [
+    {
+      "id": "akshit-deal-miden-foundation",
+      "extractor": "extract-deals",
+      "severity": "critical",
+      "description": "Miden Foundation: greenfield prospect, no foundation yet, mainnet July-August 2026, TGE Q1 2027 (Jan-Mar), one Cayman Opco entity only",
+      "transcript_quote": "we are in a position where we only have one entity no Foundation no to economics... mainnet we are planning to launch mainnet in July this this year... TG is something that will work towards essentially most likely in January to March kind of time frame",
+      "check": "JSON contains 'Miden' or 'Maiden' as a deal/prospect with: no foundation yet, mainnet July-August 2026, TGE Q1 2027, single entity currently"
+    },
+    {
+      "id": "akshit-deal-delaware-entity",
+      "extractor": "extract-deals",
+      "severity": "high",
+      "description": "A second entity (Delaware company) was just set up for the Miden wallet app (app store publishing)",
+      "transcript_quote": "last week we set up another company in us in delaware. Which will basically publish applications onto play store and apple store",
+      "check": "JSON notes a newly formed Delaware entity for wallet/app store publishing as part of the Miden deal context"
+    },
+    {
+      "id": "akshit-action-proposal",
+      "extractor": "extract-action-items",
+      "severity": "critical",
+      "description": "Petri/Carl to send proposal covering pricing, full stack, and structure — via Telegram",
+      "transcript_quote": "please share some sort of proposal and whatnot... Telegram is better",
+      "check": "JSON contains an action item for the Hash/Lemma team (operator side) to send a formal proposal to Akshit via Telegram"
+    },
+    {
+      "id": "akshit-intent-wants-proposal",
+      "extractor": "extract-intent-signals",
+      "severity": "critical",
+      "description": "Strong buying intent: Akshit explicitly asked for a proposal and said 'we should be able to make quick decisions now'",
+      "transcript_quote": "I think please share some sort of proposal and whatnot. Like, we should be able to make quick decisions now. Because time is up, road time is up.",
+      "check": "JSON captures explicit buying intent: Akshit requested a proposal and signaled urgency/readiness to decide"
+    },
+    {
+      "id": "akshit-intent-vasp-question",
+      "extractor": "extract-intent-signals",
+      "severity": "high",
+      "description": "Akshit has an open VASP classification question — worried token issuance = VASP status",
+      "transcript_quote": "you cannot sell tokens you cannot do something something otherwise you are listed as vast essentially in caymans",
+      "check": "JSON captures Akshit's VASP classification concern as an intent signal — needs legal clarity before TGE"
+    },
+    {
+      "id": "akshit-intent-raise-planned",
+      "extractor": "extract-intent-signals",
+      "severity": "high",
+      "description": "Miden planning another fundraise in summer/autumn 2026; ICO as fallback before TGE",
+      "transcript_quote": "we are planning to do another race as well... if everything goes right we'll actually do some sort of raise this summer or end of summer like autumn kind of time period",
+      "check": "JSON captures the planned 2026 fundraise (summer/autumn) as a timing signal for foundation setup urgency"
+    },
+    {
+      "id": "akshit-referrer-zeem",
+      "extractor": "extract-referrer-network",
+      "severity": "critical",
+      "description": "Zeem introduced Akshit to Hash; Zeem was invited to the Hash breakfast by Hash's market maker partner (unnamed)",
+      "transcript_quote": "talking to zeem on Tuesday and then he came to our breakfast on Wednesday morning. And actually he got invited not by me he got invited by your market maker who was one of our partners",
+      "check": "JSON identifies Zeem as the referrer; notes Zeem was brought to Hash's breakfast event by an unnamed market maker partner of Hash"
+    },
+    {
+      "id": "akshit-personal-polygon-background",
+      "extractor": "extract-personal-context",
+      "severity": "high",
+      "description": "Akshit was Chief of Staff to Sandeep (Polygon business co-founder); Miden spun out of Polygon's DevCore team",
+      "transcript_quote": "chief of staff for sandeep at polygon sandeep is one of the business co-founders at polygon and as maiden spun out of polygon",
+      "check": "JSON captures Akshit's Polygon/Sandeep background and Miden's origin as a Polygon spinout"
+    },
+    {
+      "id": "akshit-personal-india-timezone",
+      "extractor": "extract-personal-context",
+      "severity": "medium",
+      "description": "Akshit based in India (moved from Dubai in March 2026); took the call at 1:30 AM India time",
+      "transcript_quote": "I was in Dubai, but in March I came to India... it's 12 now it's 1:30 here in India",
+      "check": "JSON notes Akshit is India-based (moved from Dubai March 2026) and was on the call at 1:30 AM local time"
+    },
+    {
+      "id": "akshit-correction-one-entity",
+      "extractor": "extract-corrections",
+      "severity": "high",
+      "description": "Correction: Miden has only ONE entity currently (Opco), not a DevCo/OpCo split — any prior brief assuming two entities is wrong",
+      "transcript_quote": "Do you guys have one entity or two? It's the same it's the same I just wanted to double check",
+      "check": "JSON captures the single-entity correction: Miden has one Cayman Opco, not a separate DevCo/OpCo structure"
+    },
+    {
+      "id": "akshit-correction-tge-not-imminent",
+      "extractor": "extract-corrections",
+      "severity": "high",
+      "description": "Correction: TGE is NOT imminent — Akshit deliberately held off on TGE in Nov-Dec 2025 when privacy was hot because tech wasn't ready",
+      "transcript_quote": "we were thinking about doing tg last November December kind of time frame when privacy was kind of hot. But like tech wise you're not ready",
+      "check": "JSON captures that TGE was deliberately deferred from late 2025; not a missed opportunity but a strategic choice — product first, token second"
+    },
+    {
+      "id": "akshit-relationship-graph-monad",
+      "extractor": "extract-relationship-graph",
+      "severity": "medium",
+      "description": "Monad team mentioned as reference: Petri is a director there; Vault.fyi CEO is friends with Monad people",
+      "transcript_quote": "he's friends with the monad guys. So he reached out to monad where petri sits on",
+      "check": "JSON notes Monad as a connected reference client (Petri sits on Monad) — warm connection for Vault.fyi credibility"
+    },
+    {
+      "id": "akshit-insider-privacy-protocol-liability",
+      "extractor": "extract-insider-knowledge",
+      "severity": "high",
+      "description": "Akshit concerned that launching mainnet from Opco could expose founders to liability given it's a privacy protocol — driving foundation structure urgency",
+      "transcript_quote": "it's a privacy based protocol and essentially there could be some sort of liability and what not that would come to founders effect do it from the office side of things",
+      "check": "JSON captures the privacy-protocol-liability concern as driving the foundation setup — non-public strategic reasoning"
+    }
+  ]
+}
