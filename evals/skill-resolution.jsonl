@@ -1,0 +1,30 @@
+{"id": "intro-email-basic", "intent": "draft an intro email connecting Sarah at Andreessen to Mike at Stripe", "expected_skill": "intro-email", "ambiguous_with": [], "notes": "clear double opt-in intro"}
+{"id": "post-call-process", "intent": "process the Granola transcript from my 3pm call and extract tasks", "expected_skill": "post-call-processor", "ambiguous_with": ["multi-extract"], "notes": "post-call-processor wraps multi-extract"}
+{"id": "call-brief-gen", "intent": "prepare a brief for my meeting with Garry tomorrow", "expected_skill": "call-brief-generator", "ambiguous_with": ["briefing"], "notes": "call-brief = meeting prep; briefing = daily roll-up"}
+{"id": "daily-briefing", "intent": "give me my morning briefing", "expected_skill": "briefing", "ambiguous_with": ["daily-task-prep"], "notes": "briefing is the morning overview"}
+{"id": "voice-note", "intent": "ingest this voice memo I just recorded", "expected_skill": "voice-note-ingest", "ambiguous_with": ["media-ingest"], "notes": "voice-note-ingest is specialized"}
+{"id": "pdf-ingest", "intent": "add this PDF whitepaper to my brain", "expected_skill": "brain-pdf", "ambiguous_with": ["ingest", "media-ingest"], "notes": "brain-pdf is the PDF specialist"}
+{"id": "academic-paper-verify", "intent": "verify the citations in this arxiv paper are real", "expected_skill": "academic-verify", "ambiguous_with": ["citation-fixer"], "notes": "academic-verify checks existence, citation-fixer formats"}
+{"id": "citation-format", "intent": "fix the citation formatting in this draft essay", "expected_skill": "citation-fixer", "ambiguous_with": ["academic-verify"], "notes": "formatting, not verification"}
+{"id": "perplexity-search", "intent": "do a quick perplexity search on the EU AI Act timeline", "expected_skill": "perplexity-research", "ambiguous_with": ["data-research"], "notes": "explicit perplexity call"}
+{"id": "deep-data-research", "intent": "build a structured dataset of every Cayman foundation registered since 2020", "expected_skill": "data-research", "ambiguous_with": ["perplexity-research", "archive-crawler"], "notes": "structured data extraction"}
+{"id": "archive-crawl", "intent": "crawl archive.org for old versions of this fund's website", "expected_skill": "archive-crawler", "ambiguous_with": [], "notes": "archive.org specific"}
+{"id": "publish-essay", "intent": "publish this essay draft to my blog", "expected_skill": "publish", "ambiguous_with": [], "notes": "publishing flow"}
+{"id": "frontmatter-check", "intent": "validate frontmatter on all pages I edited today", "expected_skill": "frontmatter-guard", "ambiguous_with": ["maintain"], "notes": "frontmatter-specific"}
+{"id": "brain-maintain", "intent": "run brain maintenance and fix broken links", "expected_skill": "maintain", "ambiguous_with": ["frontmatter-guard"], "notes": "general maintenance"}
+{"id": "task-prep", "intent": "prep my task list for tomorrow", "expected_skill": "daily-task-prep", "ambiguous_with": ["daily-task-manager"], "notes": "prep = forward-looking"}
+{"id": "task-manage", "intent": "show me my open tasks and their status", "expected_skill": "daily-task-manager", "ambiguous_with": ["daily-task-prep"], "notes": "manage = current state"}
+{"id": "enrich-company", "intent": "enrich Acme Corp with employee count and funding", "expected_skill": "enrich", "ambiguous_with": ["data-research"], "notes": "enrich is the lightweight wrapper"}
+{"id": "ingest-url", "intent": "save this article URL to my brain", "expected_skill": "idea-ingest", "ambiguous_with": ["ingest"], "notes": "casual link save"}
+{"id": "meeting-ingest", "intent": "import this calendar event into the brain", "expected_skill": "meeting-ingestion", "ambiguous_with": [], "notes": "calendar-to-brain"}
+{"id": "concept-synth", "intent": "synthesize my notes on power-law distributions into one page", "expected_skill": "concept-synthesis", "ambiguous_with": [], "notes": "merge related notes"}
+{"id": "amb-research-paper", "intent": "research this paper", "expected_skill": "strategic-reading", "ambiguous_with": ["academic-verify", "perplexity-research"], "notes": "ambiguous — 'research' could mean read, verify, or web-search"}
+{"id": "amb-policy-paper", "intent": "review this policy paper", "expected_skill": "strategic-reading", "ambiguous_with": ["academic-verify", "perplexity-research"], "notes": "policy paper review = deep read"}
+{"id": "amb-brief-it", "intent": "brief me on this", "expected_skill": "briefing", "ambiguous_with": ["call-brief-generator", "strategic-reading"], "notes": "ambiguous without object"}
+{"id": "amb-process-call", "intent": "process this call", "expected_skill": "post-call-processor", "ambiguous_with": ["multi-extract", "meeting-ingestion"], "notes": "could be extract-only or full processor"}
+{"id": "amb-research-company", "intent": "research this company", "expected_skill": "data-research", "ambiguous_with": ["enrich", "perplexity-research"], "notes": "depth unclear"}
+{"id": "amb-add-to-brain", "intent": "add this to the brain", "expected_skill": "ingest", "ambiguous_with": ["idea-ingest", "brain-pdf", "media-ingest", "voice-note-ingest"], "notes": "type unspecified"}
+{"id": "amb-extract", "intent": "extract everything from this", "expected_skill": "multi-extract", "ambiguous_with": ["extractors", "post-call-processor"], "notes": "multi-extract is the orchestrator"}
+{"id": "edge-debug-cron", "intent": "why didn't my cron job fire last night", "expected_skill": "cron-scheduler", "ambiguous_with": [], "notes": "edge — operational debugging, not knowledge work"}
+{"id": "edge-emotional", "intent": "I'm overwhelmed and don't know what to work on", "expected_skill": "FALLBACK_HUMAN", "ambiguous_with": ["daily-task-manager", "briefing"], "notes": "edge — emotional/coaching, no skill match"}
+{"id": "edge-write-code", "intent": "write me a Python script to scrape this website", "expected_skill": "FALLBACK_HUMAN", "ambiguous_with": ["data-research", "archive-crawler"], "notes": "edge — code generation, outside gbrain skill set"}
