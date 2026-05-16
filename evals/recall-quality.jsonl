@@ -1,0 +1,20 @@
+{"id": "recall-garry-tan", "query": "what do I know about Garry Tan", "relevant": ["people/garry-tan", "reference/garry-tan-gbrain-philosophy"], "TODO_FILL_IN": false, "category": "person"}
+{"id": "recall-gstackbrain", "query": "gstackbrain project status", "relevant": ["projects/gstack/gstackbrain", "projects/gstack-hermes-integration", "projects/gstack-hermes-integration/plan"], "TODO_FILL_IN": false, "category": "architecture"}
+{"id": "recall-yc-labs-team", "query": "YC labs internal team", "relevant": ["originals/yc-labs-internal-team"], "TODO_FILL_IN": false, "category": "company"}
+{"id": "recall-harj-strategy", "query": "Harj's YC labs strategy notes", "relevant": ["originals/harj-yc-labs-strategy-2026-05"], "TODO_FILL_IN": false, "category": "recent"}
+{"id": "recall-thin-harness-essay", "query": "thin harness fat skills philosophy", "relevant": ["docs/ethos/thin_harness_fat_skills"], "TODO_FILL_IN": false, "category": "essay"}
+{"id": "recall-markdown-recipes", "query": "markdown skills as recipes essay", "relevant": ["docs/ethos/markdown_skills_as_recipes"], "TODO_FILL_IN": false, "category": "essay"}
+{"id": "recall-gbrain-arch", "query": "gbrain architecture overview", "relevant": ["reference/gbrain-architecture-snapshot", "reference/gbrain-laptop-mini-state-2026-05-16"], "TODO_FILL_IN": false, "category": "architecture"}
+{"id": "recall-laptop-mini-state", "query": "current state of laptop vs mini gbrain", "relevant": ["reference/gbrain-laptop-mini-state-2026-05-16"], "TODO_FILL_IN": false, "category": "architecture"}
+{"id": "recall-meeting-brief", "query": "brief for my upcoming meeting with TODO_PERSON", "relevant": ["TODO_FILL_IN_meeting_brief_slug"], "TODO_FILL_IN": true, "category": "meeting"}
+{"id": "recall-person-enrichment", "query": "what's TODO_PERSON's background and recent activity", "relevant": ["TODO_FILL_IN_person_slug"], "TODO_FILL_IN": true, "category": "person"}
+{"id": "recall-deal-status", "query": "status of the TODO_DEAL deal", "relevant": ["TODO_FILL_IN_deal_slug"], "TODO_FILL_IN": true, "category": "deal"}
+{"id": "recall-company-intel", "query": "everything I know about TODO_COMPANY", "relevant": ["TODO_FILL_IN_company_slug", "TODO_FILL_IN_company_meetings_slug"], "TODO_FILL_IN": true, "category": "company"}
+{"id": "recall-recent-decision", "query": "what did I decide about TODO_TOPIC last week", "relevant": ["TODO_FILL_IN_decision_slug"], "TODO_FILL_IN": true, "category": "recent"}
+{"id": "recall-learned-about", "query": "what did I learn about TODO_TOPIC", "relevant": ["TODO_FILL_IN_learning_slug"], "TODO_FILL_IN": true, "category": "recent"}
+{"id": "recall-event-prospects", "query": "who should I meet at TODO_EVENT", "relevant": ["TODO_FILL_IN_event_prospects_slug"], "TODO_FILL_IN": true, "category": "event"}
+{"id": "recall-cayman-foundations", "query": "Cayman foundations research", "relevant": ["TODO_FILL_IN_hash_lemma_cayman_slug"], "TODO_FILL_IN": true, "category": "company"}
+{"id": "recall-partner-cadence", "query": "when did I last talk to TODO_PARTNER", "relevant": ["TODO_FILL_IN_partner_cadence_slug"], "TODO_FILL_IN": true, "category": "person"}
+{"id": "recall-intro-history", "query": "intros I've made for TODO_PERSON", "relevant": ["TODO_FILL_IN_intro_log_slug"], "TODO_FILL_IN": true, "category": "person"}
+{"id": "recall-pipeline-state", "query": "current DataHive pipeline state", "relevant": ["TODO_FILL_IN_datahive_state_slug"], "TODO_FILL_IN": true, "category": "architecture"}
+{"id": "recall-quarterly-thesis", "query": "my Q2 2026 thesis on TODO_TOPIC", "relevant": ["TODO_FILL_IN_thesis_slug"], "TODO_FILL_IN": true, "category": "recent"}
