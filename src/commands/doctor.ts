@@ -603,6 +603,10 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
   checks.push(await checkGradeConfidenceDrift(engine));
   checks.push(await checkVoiceGateHealth(engine));
 
+  // 11. Malformed pages.type field — recursively-quoted type values left over
+  // from the matter.stringify serializer bug. Fix: `gbrain repair-type-field --apply`.
+  checks.push(await checkMalformedTypeField(engine));
+
   return computeDoctorReport(checks);
 }
 
@@ -775,6 +779,35 @@ export async function checkVoiceGateHealth(engine: BrainEngine): Promise<Check> 
       name: 'voice_gate_health',
       status: 'warn',
       message: `Could not check voice gate health: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+/**
+ * Surfaces pages whose `type` column contains a quote character — the
+ * fingerprint of the recursively-escaped corruption that the serializer-wave
+ * fix closes. Engine-portable POSIX-regex predicate matches PG and PGLite.
+ */
+export async function checkMalformedTypeField(engine: BrainEngine): Promise<Check> {
+  try {
+    const rows = await engine.executeRaw<{ count: string | number }>(
+      `SELECT COUNT(*)::int AS count FROM pages WHERE type !~ '^[a-z][a-z0-9_-]*$'`,
+    );
+    const count = Number(rows[0]?.count ?? 0);
+    if (count === 0) {
+      return { name: 'malformed_type_field', status: 'ok', message: 'All pages.type values match enum shape' };
+    }
+    return {
+      name: 'malformed_type_field',
+      status: 'fail',
+      message: `${count} pages with malformed type field — run \`gbrain repair-type-field --apply\``,
+      issues: [{ type: 'malformed_type_field', skill: 'repair-type-field', action: 'gbrain repair-type-field --apply' }],
+    };
+  } catch (err) {
+    return {
+      name: 'malformed_type_field',
+      status: 'warn',
+      message: `Could not check pages.type: ${(err as Error).message}`,
     };
   }
 }
