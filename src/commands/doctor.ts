@@ -17,6 +17,8 @@ export interface Check {
   status: 'ok' | 'warn' | 'fail';
   message: string;
   issues?: Array<{ type: string; skill: string; action: string; fix?: any }>;
+  // PC2 add #2 (B14 self-healing): pasteable commands per failure code.
+  actions?: string[];
 }
 
 /**
@@ -424,6 +426,9 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
   // PC2 Workstream E: cycle_freshness — heartbeat jsonl from com.gbrain.cycle.
   checks.push(await checkCycleFreshness(engine));
 
+  // PC2 add #5: disk_pressure — fails + auto-pauses backfill at <5Gi free.
+  checks.push(await checkDiskPressure(engine));
+
   return computeDoctorReport(checks);
 }
 
@@ -447,14 +452,20 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
 // PC2 Workstream E (2026-05-21): cycle_freshness — reads ~/.gbrain/heartbeat/cycle.jsonl.
 export async function checkCycleFreshness(_engine: BrainEngine): Promise<Check> {
   const path = join(process.env.HOME ?? "", ".gbrain/heartbeat/cycle.jsonl");
+  const warnActions = ["launchctl kickstart -k gui/$UID/com.gbrain.cycle"];
+  const failActions = [
+    "launchctl print gui/$UID/com.gbrain.cycle",
+    "tail -50 ~/Library/Logs/gbrain-cycle.err.log",
+    "launchctl bootout gui/$UID ~/Library/LaunchAgents/com.gbrain.cycle.plist && launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.gbrain.cycle.plist",
+  ];
   if (!existsSync(path)) {
-    return { name: "cycle_freshness", status: "warn", message: "No heartbeat file yet (com.gbrain.cycle may not have fired)" };
+    return { name: "cycle_freshness", status: "warn", message: "No heartbeat file yet (com.gbrain.cycle may not have fired)", actions: warnActions };
   }
   let lines: string[];
   try {
     lines = readFileSync(path, "utf8").trim().split("\n").filter(Boolean).slice(-200);
   } catch (e) {
-    return { name: "cycle_freshness", status: "warn", message: `Cannot read ${path}: ${e instanceof Error ? e.message : String(e)}` };
+    return { name: "cycle_freshness", status: "warn", message: `Cannot read ${path}: ${e instanceof Error ? e.message : String(e)}`, actions: warnActions };
   }
   const lastByPhase: Record<string, number> = {};
   for (const ln of lines) {
@@ -468,32 +479,82 @@ export async function checkCycleFreshness(_engine: BrainEngine): Promise<Check> 
   }
   const now = Date.now();
   const hours = (ms: number) => (now - ms) / 3600_000;
+  // PC2 add #6 — cadence per phase (hours). 2x cadence = missed-fire FAIL regardless of absolute age.
+  const cadenceHrs: Record<string, number> = {
+    synthesize: 6, patterns: 6, consolidate: 6, embed: 1, purge: 24,
+  };
   const longCycle = ["synthesize", "patterns", "consolidate"];
   const fastCycle = ["embed"];
   const warnings: string[] = [];
   const fails: string[] = [];
-  for (const ph of longCycle) {
+  for (const ph of [...longCycle, ...fastCycle]) {
     const last = lastByPhase[ph];
+    const cad = cadenceHrs[ph];
     if (!last) { warnings.push(`${ph}: never fired`); continue; }
     const h = hours(last);
-    if (h > 24) fails.push(`${ph} ${h.toFixed(1)}h stale`);
-    else if (h > 12) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
-  }
-  for (const ph of fastCycle) {
-    const last = lastByPhase[ph];
-    if (!last) { warnings.push(`${ph}: never fired`); continue; }
-    const h = hours(last);
-    if (h > 6) fails.push(`${ph} ${h.toFixed(1)}h stale`);
-    else if (h > 2) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
+    // 2x cadence missed-fire detection (add #6) — FAIL regardless of absolute thresholds.
+    if (cad && h > 2 * cad) {
+      fails.push(`${ph} ${h.toFixed(1)}h stale (>2x cadence ${cad}h)`);
+      continue;
+    }
+    if (longCycle.includes(ph)) {
+      if (h > 24) fails.push(`${ph} ${h.toFixed(1)}h stale`);
+      else if (h > 12) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
+    } else {
+      if (h > 6) fails.push(`${ph} ${h.toFixed(1)}h stale`);
+      else if (h > 2) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
+    }
   }
   if (fails.length) {
-    return { name: "cycle_freshness", status: "fail", message: `Cycle stalled: ${fails.join(", ")}. Restart: launchctl kickstart -k gui/$UID/com.gbrain.cycle` };
+    return {
+      name: "cycle_freshness",
+      status: "fail",
+      message: `Cycle stalled: ${fails.join(", ")}.`,
+      actions: failActions,
+    };
   }
   if (warnings.length) {
-    return { name: "cycle_freshness", status: "warn", message: warnings.join(", ") };
+    return { name: "cycle_freshness", status: "warn", message: warnings.join(", "), actions: warnActions };
   }
   const summary = Object.entries(lastByPhase).map(([ph, t]) => `${ph}=${hours(t).toFixed(1)}h ago`).join(", ");
   return { name: "cycle_freshness", status: "ok", message: summary || "OK" };
+}
+
+
+// PC2 add #5 (2026-05-21): disk_pressure — fail at <5Gi free; touch ~/.gbrain/backfill.paused on FAIL.
+export async function checkDiskPressure(_engine: BrainEngine): Promise<Check> {
+  try {
+    const { execSync } = await import("node:child_process");
+    const out = execSync("df -k /", { encoding: "utf8" });
+    // line 2: Filesystem 1K-blocks Used Available Capacity ...
+    const parts = out.split("\n")[1]?.trim().split(/\s+/) ?? [];
+    const availKb = parseInt(parts[3] ?? "0", 10);
+    const availGi = availKb / (1024 * 1024);
+    const pauseFlag = join(process.env.HOME ?? "", ".gbrain/backfill.paused");
+    if (availGi < 5) {
+      // Auto-pause backfill (idempotent — file may already exist).
+      try {
+        const { writeFileSync } = await import("node:fs");
+        writeFileSync(pauseFlag, `auto-paused by doctor at ${new Date().toISOString()} — disk ${availGi.toFixed(1)}Gi free\n`);
+      } catch { /* best-effort */ }
+      return {
+        name: "disk_pressure",
+        status: "fail",
+        message: `Mini disk has ${availGi.toFixed(1)}Gi free (<5Gi). Backfill auto-paused.`,
+        actions: [
+          "du -sh ~/.gbrain/laptop-sessions-archive/",
+          "gbrain backfill-synthesize --pause",
+          "ls -lhS ~/.gbrain/laptop-sessions/ | head",
+        ],
+      };
+    }
+    if (availGi < 10) {
+      return { name: "disk_pressure", status: "warn", message: `${availGi.toFixed(1)}Gi free (<10Gi)` };
+    }
+    return { name: "disk_pressure", status: "ok", message: `${availGi.toFixed(1)}Gi free` };
+  } catch (e) {
+    return { name: "disk_pressure", status: "warn", message: `df probe failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 export async function checkRerankerHealth(engine: BrainEngine): Promise<Check> {
@@ -2565,6 +2626,9 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
     checks.push(await checkRerankerHealth(engine));
     progress.heartbeat("cycle_freshness");
     checks.push(await checkCycleFreshness(engine));
+    // PC2 add #5: disk_pressure.
+    progress.heartbeat('disk_pressure');
+    checks.push(await checkDiskPressure(engine));
   }
 
   progress.finish();
