@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { marked } from 'marked';
 import type { BrainEngine, FileSpec } from './engine.ts';
 import { parseMarkdown } from './markdown.ts';
+import { assertValidPageType } from './types-enum.ts';
 import { chunkText } from './chunkers/recursive.ts';
 import { chunkCodeText, chunkCodeTextFull, detectCodeLanguage, CHUNKER_VERSION } from './chunkers/code.ts';
 import { findChunkForOffset } from './chunkers/edge-extractor.ts';
@@ -236,6 +237,7 @@ export async function importFromContent(
   }
 
   const parsed = parseMarkdown(content, slug + '.md');
+  assertValidPageType(parsed.type, `importFromContent(slug=${slug})`);
 
   // Hash includes ALL fields for idempotency (not just compiled_truth + timeline)
   const hash = createHash('sha256')
@@ -447,6 +449,7 @@ export async function importFromFile(
   }
 
   const parsed = parseMarkdown(content, relativePath);
+  assertValidPageType(parsed.type, `importFromFile(path=${relativePath})`);
 
   // Enforce path-authoritative slug. parseMarkdown prefers frontmatter.slug over
   // the path-derived slug, so a mismatch here means the frontmatter is trying

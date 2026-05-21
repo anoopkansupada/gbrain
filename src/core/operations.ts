@@ -10,6 +10,7 @@ import { clampSearchLimit } from './engine.ts';
 import type { GBrainConfig } from './config.ts';
 import type { PageType } from './types.ts';
 import { importFromContent } from './import-file.ts';
+import { TYPE_ENUM } from './types-enum.ts';
 import { hybridSearch, hybridSearchCached } from './search/hybrid.ts';
 import { expandQuery } from './search/expansion.ts';
 import { dedupResults } from './search/dedup.ts';
@@ -571,6 +572,28 @@ const put_page: Operation = {
         if (!slug.startsWith(prefix) || slug.length === prefix.length) {
           throw new OperationError('permission_denied', `put_page via subagent must write under '${prefix}...'`);
         }
+      }
+    }
+
+    // Fast frontmatter type peek: rejects corrupt/unknown types at the op
+    // boundary so the error envelope is OperationError-shaped instead of a
+    // raw throw from importFromContent. Single regex against the first ~2KB
+    // — cheap relative to the write path.
+    const head = (p.content as string).slice(0, 2048);
+    const m = head.match(/^---[\s\S]*?\n\s*type\s*:\s*(.+?)\s*\n/);
+    if (m) {
+      const raw = m[1].trim();
+      if (/['"]/.test(raw)) {
+        throw new OperationError(
+          'invalid_params',
+          `Invalid type "${raw}" for put_page slug "${slug}" (contains quote characters — corruption from old serializer). Run: gbrain repair-type-field --apply`,
+        );
+      }
+      if (!TYPE_ENUM.has(raw)) {
+        throw new OperationError(
+          'invalid_params',
+          `Invalid type "${raw}" for put_page slug "${slug}". Run: gbrain repair-type-field --apply`,
+        );
       }
     }
 

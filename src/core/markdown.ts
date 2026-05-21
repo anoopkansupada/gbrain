@@ -351,7 +351,7 @@ export function serializeMarkdown(
     fullFrontmatter.tags = meta.tags;
   }
 
-  const yamlContent = matter.stringify('', fullFrontmatter).trim();
+  const yamlContent = matter.stringify('', sanitizeFrontmatterScalars(fullFrontmatter)).trim();
 
   let body = compiled_truth;
   if (timeline) {
@@ -359,6 +359,42 @@ export function serializeMarkdown(
   }
 
   return yamlContent + '\n\n' + body + '\n';
+}
+
+/**
+ * Strip recursively-accreted YAML quote runs from string scalars before
+ * re-serialization. `matter.stringify` (via js-yaml) re-quotes any value that
+ * already starts with `'` or `"`, doubling the wrapper on every round-trip
+ * (`'''deal'''` -> `'''''''deal'''''''`). The fix: unwrap balanced outer
+ * quote runs when stripping yields a value that round-trips to itself.
+ *
+ * Only touches frontmatter top-level string values. Arrays/objects/numbers
+ * pass through. The unwrap is a no-op on clean scalars (`deal`, `foo bar`,
+ * `has: colon`) — those have no leading quote to strip.
+ */
+function sanitizeFrontmatterScalars(
+  fm: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fm)) {
+    out[k] = typeof v === 'string' ? stripAccretedQuotes(v) : v;
+  }
+  return out;
+}
+
+function stripAccretedQuotes(s: string): string {
+  // Strip the longest balanced run of leading + trailing single OR double
+  // quotes. Run length must match on both sides — `'''a'''` -> `a`, but
+  // `'a''` (unbalanced) stays as-is.
+  let i = 0;
+  while (i < s.length && (s[i] === "'" || s[i] === '"')) i++;
+  if (i === 0) return s;
+  const lead = s[0];
+  let j = 0;
+  while (j < s.length - i && s[s.length - 1 - j] === lead) j++;
+  const run = Math.min(i, j);
+  if (run === 0) return s;
+  return s.slice(run, s.length - run);
 }
 
 function inferType(filePath?: string): PageType {
