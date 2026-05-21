@@ -118,6 +118,43 @@ function matchesAnyExclude(text: string, patterns: RegExp[]): boolean {
   return false;
 }
 
+
+/**
+ * PC2 (2026-05-21): flatten Claude Code session .jsonl into a plain-text conversation.
+ * Extracts user messages (queue-operation enqueue) and assistant turns (message.role+content).
+ * Skips infrastructure lines (hooks, dequeue, agent-setting).
+ */
+export function extractClaudeJsonlText(raw: string): string {
+  const out: string[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    let j: any;
+    try { j = JSON.parse(line); } catch { continue; }
+    if (j.type === 'queue-operation' && j.operation === 'enqueue' && typeof j.content === 'string' && j.content.trim()) {
+      out.push(`[user @ ${j.timestamp ?? ''}]\n${j.content}\n`);
+      continue;
+    }
+    if (j.message && typeof j.message === 'object') {
+      const role = j.message.role;
+      const c = j.message.content;
+      let text = '';
+      if (typeof c === 'string') text = c;
+      else if (Array.isArray(c)) {
+        text = c.map((b: any) => {
+          if (typeof b === 'string') return b;
+          if (b && typeof b === 'object') return (b.text ?? b.content ?? '') as string;
+          return '';
+        }).filter(Boolean).join('\n');
+      }
+      if (text && text.trim()) {
+        const ts = j.timestamp ?? '';
+        out.push(`[${role} @ ${ts}]\n${text}\n`);
+      }
+    }
+  }
+  return out.join('\n');
+}
+
 function listTextFiles(dir: string): string[] {
   let entries: string[];
   try {
@@ -127,7 +164,7 @@ function listTextFiles(dir: string): string[] {
   }
   const out: string[] = [];
   for (const name of entries) {
-    if (!name.endsWith('.txt') && !name.endsWith('.md')) continue;
+    if (!name.endsWith('.txt') && !name.endsWith('.md') && !name.endsWith('.jsonl')) continue;
     const full = join(dir, name);
     try {
       if (statSync(full).isFile()) out.push(full);
@@ -161,15 +198,24 @@ export function discoverTranscripts(opts: DiscoverOpts): DiscoveredTranscript[] 
   const results: DiscoveredTranscript[] = [];
   for (const dir of dirs) {
     for (const filePath of listTextFiles(dir)) {
-      const ext = filePath.endsWith('.md') ? '.md' : '.txt';
+      const ext = filePath.endsWith('.md') ? '.md' : filePath.endsWith('.jsonl') ? '.jsonl' : '.txt';
       const baseName = basename(filePath, ext);
       const dateMatch = DATE_RE.exec(baseName);
-      const inferredDate = dateMatch ? dateMatch[1] : null;
+      let inferredDate = dateMatch ? dateMatch[1] : null;
+      // PC2 (2026-05-21): for .jsonl session transcripts with UUID basenames,
+      // fall back to file mtime so date-range filters work for backfill chunks.
+      if (!inferredDate && filePath.endsWith('.jsonl')) {
+        try {
+          const m = statSync(filePath).mtime;
+          inferredDate = `${m.getUTCFullYear()}-${String(m.getUTCMonth()+1).padStart(2,'0')}-${String(m.getUTCDate()).padStart(2,'0')}`;
+        } catch { /* leave null */ }
+      }
       if (!isInDateRange(inferredDate, opts)) continue;
 
       let content: string;
       try {
-        content = readFileSync(filePath, 'utf8');
+        const raw = readFileSync(filePath, 'utf8');
+        content = filePath.endsWith('.jsonl') ? extractClaudeJsonlText(raw) : raw;
       } catch {
         continue;
       }
@@ -208,20 +254,21 @@ export function readSingleTranscript(
   const excludeRes = compileExcludePatterns(opts.excludePatterns);
   let content: string;
   try {
-    content = readFileSync(filePath, 'utf8');
+    const raw = readFileSync(filePath, 'utf8');
+    content = filePath.endsWith('.jsonl') ? extractClaudeJsonlText(raw) : raw;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`could not read transcript at ${filePath}: ${msg}`);
   }
   if (content.length < minChars) return null;
   if (isDreamOutput(content, bypass)) {
-    const ext = filePath.endsWith('.md') ? '.md' : '.txt';
+    const ext = filePath.endsWith('.md') ? '.md' : filePath.endsWith('.jsonl') ? '.jsonl' : '.txt';
       const baseName = basename(filePath, ext);
     process.stderr.write(`[dream] readSingleTranscript skipped ${baseName}: dream_generated marker (self-consumption guard)\n`);
     return null;
   }
   if (matchesAnyExclude(content, excludeRes)) return null;
-  const ext = filePath.endsWith('.md') ? '.md' : '.txt';
+  const ext = filePath.endsWith('.md') ? '.md' : filePath.endsWith('.jsonl') ? '.jsonl' : '.txt';
       const baseName = basename(filePath, ext);
   const dateMatch = DATE_RE.exec(baseName);
   return {
