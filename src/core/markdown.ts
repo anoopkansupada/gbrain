@@ -1,4 +1,5 @@
 import matter from 'gray-matter';
+import { safeLoad as yamlSafeLoad } from 'js-yaml';
 import type { PageType } from './types.ts';
 import { slugifyPath } from './sync.ts';
 
@@ -217,8 +218,14 @@ function collectValidationErrors(
   }
 
   // 5. NESTED_QUOTES — common breakage pattern: `title: "Name "Nick" Last"`.
-  //    Detect any frontmatter `key: ...` line whose value contains 3 or more
-  //    unescaped double-quote characters. A clean quoted value has 2.
+  //    The heuristic: a frontmatter `key: value` line with 3+ unescaped
+  //    double-quote characters is suspicious. But raw quote-counting is
+  //    too dumb: a YAML flow sequence like `tags: ["yc", "w2025"]` has
+  //    4 unescaped `"` by design (valid), and a single-quoted scalar
+  //    like `title: 'a: "b" "c"'` has literal inner `"` (also valid).
+  //    Disambiguate by running js-yaml on just the value; only flag
+  //    lines that genuinely fail to parse. The full-frontmatter YAML
+  //    parse error is caught separately by check 6 (YAML_PARSE) below.
   for (let i = firstNonEmpty + 1; i < closeLine; i++) {
     const line = lines[i];
     const m = line.match(/^\s*[A-Za-z_][\w-]*\s*:\s*(.*)$/);
@@ -228,7 +235,20 @@ function collectValidationErrors(
     for (let j = 0; j < value.length; j++) {
       if (value[j] === '"' && (j === 0 || value[j - 1] !== '\\')) count++;
     }
-    if (count >= 3) {
+    if (count < 3) continue;
+
+    // 3+ unescaped quotes — could be valid YAML (flow seq, single-quoted
+    // scalar with inner quotes, bare scalar with embedded quotes) or
+    // genuinely broken. Parse the value to disambiguate.
+    let isValidYaml = false;
+    try {
+      yamlSafeLoad(value);
+      isValidYaml = true;
+    } catch {
+      // YAML parse failed — line is genuinely broken
+    }
+
+    if (!isValidYaml) {
       errors.push({
         code: 'NESTED_QUOTES',
         message: 'Nested double quotes in YAML value (use single quotes for the outer)',
@@ -331,7 +351,7 @@ export function serializeMarkdown(
     fullFrontmatter.tags = meta.tags;
   }
 
-  const yamlContent = matter.stringify('', fullFrontmatter).trim();
+  const yamlContent = matter.stringify('', sanitizeFrontmatterScalars(fullFrontmatter)).trim();
 
   let body = compiled_truth;
   if (timeline) {
@@ -339,6 +359,42 @@ export function serializeMarkdown(
   }
 
   return yamlContent + '\n\n' + body + '\n';
+}
+
+/**
+ * Strip recursively-accreted YAML quote runs from string scalars before
+ * re-serialization. `matter.stringify` (via js-yaml) re-quotes any value that
+ * already starts with `'` or `"`, doubling the wrapper on every round-trip
+ * (`'''deal'''` -> `'''''''deal'''''''`). The fix: unwrap balanced outer
+ * quote runs when stripping yields a value that round-trips to itself.
+ *
+ * Only touches frontmatter top-level string values. Arrays/objects/numbers
+ * pass through. The unwrap is a no-op on clean scalars (`deal`, `foo bar`,
+ * `has: colon`) — those have no leading quote to strip.
+ */
+function sanitizeFrontmatterScalars(
+  fm: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fm)) {
+    out[k] = typeof v === 'string' ? stripAccretedQuotes(v) : v;
+  }
+  return out;
+}
+
+function stripAccretedQuotes(s: string): string {
+  // Strip the longest balanced run of leading + trailing single OR double
+  // quotes. Run length must match on both sides — `'''a'''` -> `a`, but
+  // `'a''` (unbalanced) stays as-is.
+  let i = 0;
+  while (i < s.length && (s[i] === "'" || s[i] === '"')) i++;
+  if (i === 0) return s;
+  const lead = s[0];
+  let j = 0;
+  while (j < s.length - i && s[s.length - 1 - j] === lead) j++;
+  const run = Math.min(i, j);
+  if (run === 0) return s;
+  return s.slice(run, s.length - run);
 }
 
 function inferType(filePath?: string): PageType {

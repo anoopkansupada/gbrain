@@ -100,7 +100,7 @@ export async function whoknowsHealthCheck(_engine: BrainEngine): Promise<Check> 
   try {
     const { existsSync, readFileSync, statSync } = await import('fs');
     const path = await import('path');
-    const repoRoot = process.cwd();
+    const repoRoot = path.resolve(import.meta.dir, '..', '..');
     const fixturePath = path.join(repoRoot, 'test/fixtures/whoknows-eval.jsonl');
     if (!existsSync(fixturePath)) {
       return {
@@ -421,6 +421,9 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
   // things when reranker is on vs off.
   checks.push(await checkRerankerHealth(engine));
 
+  // PC2 Workstream E: cycle_freshness — heartbeat jsonl from com.gbrain.cycle.
+  checks.push(await checkCycleFreshness(engine));
+
   return computeDoctorReport(checks);
 }
 
@@ -441,6 +444,58 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
  *
  * Engine-agnostic (file-based + one config-key read).
  */
+// PC2 Workstream E (2026-05-21): cycle_freshness — reads ~/.gbrain/heartbeat/cycle.jsonl.
+export async function checkCycleFreshness(_engine: BrainEngine): Promise<Check> {
+  const path = join(process.env.HOME ?? "", ".gbrain/heartbeat/cycle.jsonl");
+  if (!existsSync(path)) {
+    return { name: "cycle_freshness", status: "warn", message: "No heartbeat file yet (com.gbrain.cycle may not have fired)" };
+  }
+  let lines: string[];
+  try {
+    lines = readFileSync(path, "utf8").trim().split("\n").filter(Boolean).slice(-200);
+  } catch (e) {
+    return { name: "cycle_freshness", status: "warn", message: `Cannot read ${path}: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  const lastByPhase: Record<string, number> = {};
+  for (const ln of lines) {
+    try {
+      const j = JSON.parse(ln);
+      const t = Date.parse(j.ts);
+      if (!Number.isNaN(t) && j.phase) {
+        lastByPhase[j.phase] = Math.max(lastByPhase[j.phase] ?? 0, t);
+      }
+    } catch { /* skip malformed */ }
+  }
+  const now = Date.now();
+  const hours = (ms: number) => (now - ms) / 3600_000;
+  const longCycle = ["synthesize", "patterns", "consolidate"];
+  const fastCycle = ["embed"];
+  const warnings: string[] = [];
+  const fails: string[] = [];
+  for (const ph of longCycle) {
+    const last = lastByPhase[ph];
+    if (!last) { warnings.push(`${ph}: never fired`); continue; }
+    const h = hours(last);
+    if (h > 24) fails.push(`${ph} ${h.toFixed(1)}h stale`);
+    else if (h > 12) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
+  }
+  for (const ph of fastCycle) {
+    const last = lastByPhase[ph];
+    if (!last) { warnings.push(`${ph}: never fired`); continue; }
+    const h = hours(last);
+    if (h > 6) fails.push(`${ph} ${h.toFixed(1)}h stale`);
+    else if (h > 2) warnings.push(`${ph} ${h.toFixed(1)}h stale`);
+  }
+  if (fails.length) {
+    return { name: "cycle_freshness", status: "fail", message: `Cycle stalled: ${fails.join(", ")}. Restart: launchctl kickstart -k gui/$UID/com.gbrain.cycle` };
+  }
+  if (warnings.length) {
+    return { name: "cycle_freshness", status: "warn", message: warnings.join(", ") };
+  }
+  const summary = Object.entries(lastByPhase).map(([ph, t]) => `${ph}=${hours(t).toFixed(1)}h ago`).join(", ");
+  return { name: "cycle_freshness", status: "ok", message: summary || "OK" };
+}
+
 export async function checkRerankerHealth(engine: BrainEngine): Promise<Check> {
   try {
     const { readRecentRerankFailures } = await import('../core/rerank-audit.ts');
@@ -2508,6 +2563,8 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
     // v0.35.0.0+ reranker_health — read JSONL audit; warn on auth or volume.
     progress.heartbeat('reranker_health');
     checks.push(await checkRerankerHealth(engine));
+    progress.heartbeat("cycle_freshness");
+    checks.push(await checkCycleFreshness(engine));
   }
 
   progress.finish();
