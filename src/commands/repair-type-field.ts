@@ -23,18 +23,7 @@
 import type { BrainEngine } from '../core/engine.ts';
 import * as db from '../core/db.ts';
 import { loadConfig, toEngineConfig } from '../core/config.ts';
-
-// TODO(merge): swap to `import { TYPE_ENUM } from '../core/types-enum.ts'` once the
-// serializer wave (A1+A2) lands on this branch's base. Confirmed export path from
-// team-lead 2026-05-21. Until the merge, the local const below matches the
-// 25-entry PageType union — keep in sync at merge time.
-const TYPE_ENUM: ReadonlySet<string> = new Set([
-  'person', 'company', 'deal', 'topic', 'concept', 'project',
-  'entity', 'tech', 'finance', 'personal', 'meeting', 'note',
-  'analysis', 'guide', 'hardware', 'architecture', 'writing',
-  'reflection', 'pattern', 'signal', 'task', 'organization',
-  'event', 'code', 'markdown',
-]);
+import { TYPE_ENUM } from '../core/types-enum.ts';
 
 const QUOTE_STRIP_RE = /^['"]+(.*?)['"]+$/;
 
@@ -142,7 +131,7 @@ export async function repairTypeField(opts: RepairTypeFieldOpts): Promise<Repair
 
   // Apply path. The quarantine INSERT must be idempotent — a second
   // --apply over the same corrupted rows must not duplicate.
-  // pages_quarantine_malformed_type is created by migration v67 (created by
+  // pages_quarantine_malformed_type is created by migration v81 (created by
   // the migration teammate; see schema in this file's call-site notes).
   for (const row of toNormalize) {
     await sql.unsafe(

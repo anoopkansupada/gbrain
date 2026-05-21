@@ -3766,6 +3766,88 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 81,
+    name: 'pages_type_check_and_quarantine',
+    // DB-layer backstop for the recursive `'''deal'''` corruption class that
+    // motivated the gbrain-pc1-stop-the-bleed wave. The serializer fix
+    // (matter.stringify recursive quoting) and the put_page boundary
+    // validator are the upstream guards; `gbrain repair-type-field --apply`
+    // walks existing rows. This migration is the final layer: even if every
+    // upstream guard fails, the DB itself refuses malformed `type` values.
+    //
+    // CHECK pattern `^[a-z][a-z0-9_-]*$`: starts with a lowercase letter,
+    // followed by lowercase alphanumerics, underscores, or hyphens.
+    // Tolerates NULL (existing nullable rows, though pages.type is NOT NULL).
+    //
+    // Pre-check guard (Garry B13: refuse rather than degrade): the migration
+    // REFUSES to install the constraint while corrupted rows still exist.
+    // Operator must run `gbrain repair-type-field --apply` first. This is
+    // intentional — silently dropping rows or stripping quotes at migration
+    // time would hide the bleed instead of forcing the operator to triage.
+    //
+    // Quarantine table: companion holding pen for the repair command. Rows
+    // the repair script can't normalize confidently land here for manual
+    // review. source_id is strict NOT NULL (no DEFAULT) — the repair
+    // command always sets it explicitly, and a missing source_id is a real
+    // caller bug worth failing on rather than silently labeling 'default'.
+    //
+    // Down-migration WARNING: `DROP TABLE pages_quarantine_malformed_type`
+    // loses any rows in the manual-review queue. This is intentional —
+    // v81 is a backstop migration, not a long-lived schema.
+    //
+    // Renumbered v68→v81 during master merge: v0.35.7 trajectory claimed
+    // v67, v0.36.1.0 calibration + v0.36.3.0 + autonomous-remediation claimed
+    // v68-v78, v0.37.1.0 claimed v79, v0.37.2.0 claimed v80.
+    //
+    // Schema parity: PGLite mirror lives in src/core/pglite-schema.ts.
+    idempotent: true,
+    sql: '',
+    handler: async (engine) => {
+      const malformed = await engine.executeRaw<{ count: string }>(
+        `SELECT count(*)::text AS count FROM pages
+         WHERE type IS NOT NULL AND type !~ '^[a-z][a-z0-9_-]*$'`
+      );
+      const malformedCount = parseInt(malformed[0]?.count ?? '0', 10);
+      if (malformedCount > 0) {
+        throw new Error(
+          `Cannot apply v81: ${malformedCount} pages have malformed type fields. ` +
+          `Run: gbrain repair-type-field --apply  (then re-run migration)`
+        );
+      }
+
+      await engine.runMigration(
+        81,
+        `CREATE TABLE IF NOT EXISTS pages_quarantine_malformed_type (
+           id BIGSERIAL PRIMARY KEY,
+           slug TEXT NOT NULL,
+           source_id TEXT NOT NULL,
+           original_type TEXT NOT NULL,
+           normalized_candidate TEXT,
+           quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+         );`
+      );
+      await engine.runMigration(
+        81,
+        `CREATE INDEX IF NOT EXISTS idx_quarantine_slug
+           ON pages_quarantine_malformed_type(slug, source_id);`
+      );
+
+      await engine.runMigration(
+        81,
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM pg_constraint WHERE conname = 'chk_type_format'
+           ) THEN
+             ALTER TABLE pages
+               ADD CONSTRAINT chk_type_format
+               CHECK (type IS NULL OR type ~ '^[a-z][a-z0-9_-]*$');
+           END IF;
+         END $$;`
+      );
+    },
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length > 0

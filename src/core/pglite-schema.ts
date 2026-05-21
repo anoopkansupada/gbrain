@@ -60,7 +60,10 @@ CREATE TABLE IF NOT EXISTS pages (
   source_id     TEXT    NOT NULL DEFAULT 'default'
                 REFERENCES sources(id) ON DELETE CASCADE,
   slug          TEXT    NOT NULL,
-  type          TEXT    NOT NULL,
+  -- Migration v81 (PC1): CHECK backstops the recursive triple-quote
+  -- corruption class. See src/core/migrate.ts migration v81.
+  type          TEXT    NOT NULL
+                CHECK (type IS NULL OR type ~ '^[a-z][a-z0-9_-]*$'),
   -- v0.19.0: markdown vs code distinction at the DB level.
   page_kind     TEXT    NOT NULL DEFAULT 'markdown'
                 CHECK (page_kind IN ('markdown','code','image')),
@@ -824,6 +827,23 @@ CREATE TRIGGER trg_pages_search_vector
 -- pages.timeline (markdown) still feeds search_vector via trg_pages_search_vector.
 DROP TRIGGER IF EXISTS trg_timeline_search_vector ON timeline_entries;
 DROP FUNCTION IF EXISTS update_page_search_vector_from_timeline();
+
+-- ============================================================
+-- pages_quarantine_malformed_type (migration v81 backstop)
+-- ============================================================
+-- Holding pen for rows the gbrain repair-type-field --apply command
+-- cannot normalize confidently. Companion to the v81 CHECK constraint.
+CREATE TABLE IF NOT EXISTS pages_quarantine_malformed_type (
+  id BIGSERIAL PRIMARY KEY,
+  slug TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  original_type TEXT NOT NULL,
+  normalized_candidate TEXT,
+  quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quarantine_slug
+  ON pages_quarantine_malformed_type(slug, source_id);
 `;
 
 /**

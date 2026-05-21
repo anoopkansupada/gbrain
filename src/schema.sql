@@ -67,7 +67,11 @@ CREATE TABLE IF NOT EXISTS pages (
   source_id     TEXT    NOT NULL DEFAULT 'default'
                 REFERENCES sources(id) ON DELETE CASCADE,
   slug          TEXT    NOT NULL,
-  type          TEXT    NOT NULL,
+  -- Migration v81 (PC1): CHECK backstops the recursive triple-quote
+  -- corruption class. See migration v81 in src/core/migrate.ts and
+  -- the PGLite mirror in src/core/pglite-schema.ts.
+  type          TEXT    NOT NULL
+                CHECK (type IS NULL OR type ~ '^[a-z][a-z0-9_-]*$'),
   -- v0.19.0: distinguishes markdown vs code pages at the DB level.
   -- Drives orphans filter, auto-link bypass, and `query --lang`.
   page_kind     TEXT    NOT NULL DEFAULT 'markdown'
@@ -1058,6 +1062,25 @@ CREATE TRIGGER minion_job_notify AFTER INSERT OR UPDATE OF status ON minion_jobs
   FOR EACH ROW EXECUTE FUNCTION notify_minion_job_change();
 
 -- ============================================================
+-- pages_quarantine_malformed_type (migration v81 backstop)
+-- ============================================================
+-- Holding pen for rows the `gbrain repair-type-field --apply` command
+-- can't normalize confidently. Companion to the v81 CHECK constraint.
+-- source_id is strict NOT NULL (no DEFAULT) — repair command sets it
+-- explicitly; missing source_id should fail loud, not silently default.
+CREATE TABLE IF NOT EXISTS pages_quarantine_malformed_type (
+  id BIGSERIAL PRIMARY KEY,
+  slug TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  original_type TEXT NOT NULL,
+  normalized_candidate TEXT,
+  quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quarantine_slug
+  ON pages_quarantine_malformed_type(slug, source_id);
+
+-- ============================================================
 -- Row Level Security: block anon access, postgres role bypasses
 -- ============================================================
 -- The postgres role (used by gbrain via pooler) has BYPASSRLS.
@@ -1103,6 +1126,8 @@ BEGIN
     ALTER TABLE take_proposals ENABLE ROW LEVEL SECURITY;
     ALTER TABLE take_grade_cache ENABLE ROW LEVEL SECURITY;
     ALTER TABLE take_nudge_log ENABLE ROW LEVEL SECURITY;
+    -- Migration v81 (PC1) backstop
+    ALTER TABLE pages_quarantine_malformed_type ENABLE ROW LEVEL SECURITY;
     -- v0.26 OAuth 2.1 tables
     ALTER TABLE oauth_clients ENABLE ROW LEVEL SECURITY;
     ALTER TABLE oauth_tokens ENABLE ROW LEVEL SECURITY;
