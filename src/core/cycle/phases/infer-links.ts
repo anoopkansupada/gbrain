@@ -190,8 +190,10 @@ export async function runPhaseInferLinks(
           OR frontmatter ? 'current_company'
           OR frontmatter ? 'at_company'
           OR frontmatter ? 'company'
+          OR frontmatter ? 'companies'
           OR frontmatter ? 'hash_owner'
           OR frontmatter ? 'firm'
+          OR frontmatter ? 'firms'
         )
       LIMIT ${maxPagesPerRun}
     `);
@@ -218,22 +220,31 @@ export async function runPhaseInferLinks(
 
     for (const page of batch) {
       pagesScanned += 1;
-      if (alreadyHasCompanyLink(page)) continue;
+      // Per-field idempotency is gated below via valueIsAlreadyWikilink +
+      // email_domain-exists checks. We deliberately don't short-circuit
+      // pages that have ANY wikilink already, because partial-state pages
+      // (one field wrapped, another not) need the unwrapped fields fixed.
 
       const fm = page.frontmatter ?? {};
       const updates: Record<string, string> = {};
       const fieldsTouched: string[] = [];
 
-      // email → companies/<domain>
+      // email → companies/<domain>. Skip if email_domain already set
+      // (idempotent re-runs must be no-ops).
       const emailVal = fm.email;
-      if (typeof emailVal === 'string' && !valueIsAlreadyWikilink(emailVal)) {
+      const existingEmailDomain = fm.email_domain;
+      if (
+        typeof emailVal === 'string'
+        && !valueIsAlreadyWikilink(emailVal)
+        && existingEmailDomain === undefined
+      ) {
         const slug = domainToCompanySlug(emailVal, genericDomains);
         if (slug) {
           const exists = await targetExists(engine, slug);
           if (exists) {
             // Keep email as a plain string (it's a value, not a slug ref);
             // emit a separate `email_domain:` field with the wikilink wrap.
-            updates['email_domain'] = `[[${slug}]]`;
+            updates['email_domain'] = JSON.stringify(`[[${slug}]]`);
             fieldsTouched.push('email_domain');
             linksInferred += 1;
           } else {
@@ -250,11 +261,62 @@ export async function runPhaseInferLinks(
         if (!slug) continue;
         const exists = await targetExists(engine, slug);
         if (exists) {
-          updates[key] = `[[${slug}]]`;
+          updates[key] = JSON.stringify(`[[${slug}]]`);
           fieldsTouched.push(key);
           linksInferred += 1;
         } else {
           linksUnresolved += 1;
+        }
+      }
+
+      // companies / firms — array of display names. Wrap each resolvable
+      // entry; leave unresolved items as plain strings so the cohort surfaces
+      // honestly in links_unresolved instead of silently dropping.
+      for (const key of ['companies', 'firms']) {
+        const val = fm[key];
+        if (!Array.isArray(val) || val.length === 0) continue;
+        // Skip if every entry is already a wikilink string.
+        const anyUnwrapped = val.some(
+          (item) => typeof item === 'string' && item.trim() && !valueIsAlreadyWikilink(item),
+        );
+        if (!anyUnwrapped) continue;
+        const wrapped: string[] = [];
+        let touchedThisKey = false;
+        for (const item of val) {
+          if (typeof item !== 'string' || !item.trim()) {
+            wrapped.push(typeof item === 'string' ? item : String(item));
+            continue;
+          }
+          if (valueIsAlreadyWikilink(item)) {
+            wrapped.push(item);
+            continue;
+          }
+          // Heuristic: if the entry already looks like a slug shape
+          // ("hash-directors"), prepend companies/ before resolving;
+          // otherwise treat it as a display name.
+          const looksLikeSlug = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/i.test(item.trim()) && item.includes('-');
+          const slug = looksLikeSlug
+            ? `companies/${item.trim().toLowerCase()}`
+            : companyNameToSlug(item);
+          if (!slug) {
+            wrapped.push(item);
+            continue;
+          }
+          const exists = await targetExists(engine, slug);
+          if (exists) {
+            wrapped.push(`[[${slug}]]`);
+            touchedThisKey = true;
+            linksInferred += 1;
+          } else {
+            wrapped.push(item);
+            linksUnresolved += 1;
+          }
+        }
+        if (touchedThisKey) {
+          // jsonb_set on an array requires a JSON-encoded array literal;
+          // we serialize and use jsonb (not text) cast below.
+          updates[key] = JSON.stringify(wrapped);
+          fieldsTouched.push(key);
         }
       }
 
@@ -264,7 +326,7 @@ export async function runPhaseInferLinks(
         const personSlug = `people/${ownerVal.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`;
         const exists = await targetExists(engine, personSlug);
         if (exists) {
-          updates['hash_owner'] = `[[${personSlug}]]`;
+          updates['hash_owner'] = JSON.stringify(`[[${personSlug}]]`);
           fieldsTouched.push('hash_owner');
           linksInferred += 1;
         } else {
@@ -280,12 +342,15 @@ export async function runPhaseInferLinks(
 
       // Merge updates into frontmatter and persist via jsonb_set chain.
       // We update one key at a time to avoid clobbering concurrent writes
-      // to unrelated keys.
+      // to unrelated keys. Values are JSON-encoded so both strings and
+      // arrays land with the right JSONB type (jsonb_set + ::jsonb cast).
       try {
         for (const [k, v] of Object.entries(updates)) {
+          // v is either a JSON-encoded string ("\"[[companies/foo]]\"")
+          // or a JSON-encoded array ("[\"[[companies/foo]]\",\"Bar\"]").
           await engine.executeRaw(
             `UPDATE pages
-               SET frontmatter = jsonb_set(COALESCE(frontmatter, '{}'::jsonb), $2, to_jsonb($3::text), true)
+               SET frontmatter = jsonb_set(COALESCE(frontmatter, '{}'::jsonb), $2, $3::jsonb, true)
              WHERE id = $1
                AND deleted_at IS NULL`,
             [page.id, `{${k}}`, v],

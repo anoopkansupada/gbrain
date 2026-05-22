@@ -219,6 +219,63 @@ describe('runPhaseInferLinks', () => {
     expect(fm.email_domain).toBe('[[companies/stripe]]');
   });
 
+  describe('array-valued frontmatter (companies / firms)', () => {
+    test('companies: ["display name"] → element wrapped when target exists', async () => {
+      await seedPage('companies/hash-directors', {});
+      await seedPage('people/anoop-array', { companies: ['Hash Directors'] });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/anoop-array');
+      expect(fm.companies).toEqual(['[[companies/hash-directors]]']);
+    });
+
+    test('companies: [slug-shaped string] → prepends companies/ then wraps', async () => {
+      await seedPage('companies/hash-directors', {});
+      await seedPage('people/anoop-slug-shape', { companies: ['hash-directors'] });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/anoop-slug-shape');
+      expect(fm.companies).toEqual(['[[companies/hash-directors]]']);
+    });
+
+    test('companies: mixed resolvable + missing — wraps resolvable, leaves missing as plain string', async () => {
+      await seedPage('companies/hash-directors', {});
+      // companies/dapprly does NOT exist
+      await seedPage('people/mixed-arr', { companies: ['Hash Directors', 'Dapprly'] });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+      expect(r.details.links_unresolved).toBe(1);
+
+      const fm = await getFrontmatter('people/mixed-arr');
+      expect(fm.companies).toEqual(['[[companies/hash-directors]]', 'Dapprly']);
+    });
+
+    test('companies: all-wrapped → idempotent no-op', async () => {
+      await seedPage('companies/hash-directors', {});
+      await seedPage('people/already-arr', { companies: ['[[companies/hash-directors]]'] });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(0);
+      expect(r.details.pages_updated).toBe(0);
+    });
+
+    test('firms: [...] also handled', async () => {
+      await seedPage('companies/walkers', {});
+      await seedPage('people/firms-test', { firms: ['Walkers'] });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/firms-test');
+      expect(fm.firms).toEqual(['[[companies/walkers]]']);
+    });
+  });
+
   // ─── Regression cohorts (extractor-drift catalog 2026-05-21) ───
   describe('regression — extractor-drift cohorts must not produce wrong links', () => {
     test('cohort: Reana → Rena (single-token first-name slug must not match)', async () => {
