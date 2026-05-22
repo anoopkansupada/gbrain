@@ -57,6 +57,7 @@ export type CyclePhase =
   | 'lint' | 'backlinks' | 'sync' | 'synthesize' | 'extract' | 'extract_facts'
   | 'resolve_symbol_edges'
   | 'patterns' | 'recompute_emotional_weight' | 'consolidate'
+  | 'infer_links'
   | 'embed' | 'orphans' | 'purge';
 
 export const ALL_PHASES: CyclePhase[] = [
@@ -88,6 +89,12 @@ export const ALL_PHASES: CyclePhase[] = [
   // stay as audit trail. Placed AFTER patterns (graph-fresh) and BEFORE
   // embed (so the new takes get embedded same-cycle).
   'consolidate',
+  // v0.36: opportunistic typed-edge inference from structured frontmatter
+  // (email, current_company, at_company, hash_owner). Runs AFTER consolidate
+  // (which can write new entity pages via takes) and BEFORE embed (so newly
+  // wikilinked frontmatter values get embedded same-cycle). Never creates
+  // stub target pages; missing targets surface as links_unresolved.
+  'infer_links',
   'embed',
   'orphans',
   // v0.26.5: hard-deletes soft-deleted pages and expired archived sources past
@@ -118,6 +125,8 @@ const NEEDS_LOCK_PHASES: ReadonlySet<CyclePhase> = new Set([
   // v0.29 — writes pages.emotional_weight column.
   'recompute_emotional_weight',
   'consolidate',
+  // v0.36 — writes pages.frontmatter via jsonb_set; needs the cycle lock.
+  'infer_links',
   'embed',
   'purge',
 ]);
@@ -193,6 +202,10 @@ export interface CycleReport {
     facts_consolidated: number;
     /** v0.31: number of new takes created by the consolidate phase. */
     consolidate_takes_written: number;
+    /** v0.36: number of typed-edge wikilinks emitted into frontmatter by infer_links. */
+    links_inferred: number;
+    /** v0.36: number of would-be inferences whose target slug was missing. */
+    links_unresolved: number;
   };
 }
 
@@ -1298,6 +1311,31 @@ export async function runCycle(
       await safeYield(opts.yieldBetweenPhases);
     }
 
+    // ── Phase 7.5: infer_links (v0.36) ─────────────────────────
+    if (phases.includes('infer_links')) {
+      checkAborted(opts.signal);
+      if (!engine) {
+        phaseResults.push({
+          phase: 'infer_links',
+          status: 'skipped',
+          duration_ms: 0,
+          summary: 'no database connected',
+          details: { reason: 'no_database' },
+        });
+      } else {
+        progress.start('cycle.infer_links');
+        const { runPhaseInferLinks } = await import('./cycle/phases/infer-links.ts');
+        const { result, duration_ms } = await timePhase(() => runPhaseInferLinks(engine, {
+          dryRun,
+          yieldDuringPhase: opts.yieldDuringPhase,
+        }));
+        result.duration_ms = duration_ms;
+        phaseResults.push(result);
+        progress.finish();
+      }
+      await safeYield(opts.yieldBetweenPhases);
+    }
+
     // ── Phase 8: embed ──────────────────────────────────────────
     if (phases.includes('embed')) {
       checkAborted(opts.signal);
@@ -1404,6 +1442,8 @@ function emptyTotals(): CycleReport['totals'] {
     purged_pages_count: 0,
     facts_consolidated: 0,
     consolidate_takes_written: 0,
+    links_inferred: 0,
+    links_unresolved: 0,
   };
 }
 
@@ -1442,6 +1482,9 @@ function extractTotals(phases: PhaseResult[]): CycleReport['totals'] {
     } else if (p.phase === 'consolidate' && p.details) {
       t.facts_consolidated = Number(p.details.facts_consolidated ?? 0);
       t.consolidate_takes_written = Number(p.details.takes_written ?? 0);
+    } else if (p.phase === 'infer_links' && p.details) {
+      t.links_inferred = Number(p.details.links_inferred ?? 0);
+      t.links_unresolved = Number(p.details.links_unresolved ?? 0);
     }
   }
   return t;
