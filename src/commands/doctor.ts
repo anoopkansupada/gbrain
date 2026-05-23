@@ -3779,6 +3779,38 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
     fmHb();
   }
 
+
+  // 11a-ter. Pages malformed type (PC1 hindsight: tripwire for the
+  // pages.type CHECK constraint added on Anoop's instance 2026-05-23).
+  // Scans for rows where type doesn't match ^[a-z][a-z0-9_-]*$ — the
+  // shape v0.40.6+ writers produce. If the CHECK constraint ever gets
+  // dropped, or a brain hasn't adopted it yet, this surfaces the drift.
+  // Reuses gbrain repair-type-field as the fix path (scripts/, NOT cli.ts
+  // per LOCAL_PATCHES.md triage 2026-05-23).
+  progress.heartbeat('pages_malformed_type');
+  try {
+    const rows = await engine.executeRaw(
+      "SELECT slug, type FROM pages WHERE type !~ '^[a-z][a-z0-9_-]*$' LIMIT 10",
+      []
+    );
+    if (!rows || rows.length === 0) {
+      checks.push({ name: 'pages_malformed_type', status: 'ok', message: 'No malformed type values' });
+    } else {
+      const sample = rows.slice(0, 3).map((r: { slug: string; type: string }) => `${r.slug} (type=${JSON.stringify(r.type)})`).join(', ');
+      checks.push({
+        name: 'pages_malformed_type',
+        status: 'fail',
+        message: `${rows.length}${rows.length === 10 ? '+' : ''} page(s) have malformed type. Sample: ${sample}. Fix: bun ${process.env.HOME}/gbrain/scripts/repair-type-field.ts --apply`,
+      });
+    }
+  } catch (e) {
+    checks.push({
+      name: 'pages_malformed_type',
+      status: 'warn',
+      message: `Could not scan pages.type: ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+
   // 11a-bis. Eval-capture health (v0.25.0). Capture is a fire-and-forget
   // side-effect that logs failures to a persistent table so this check
   // can see drops cross-process (the MCP server captures; `gbrain doctor`
