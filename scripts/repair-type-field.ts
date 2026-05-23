@@ -20,10 +20,10 @@
  * UPDATE is FK-safe by construction. No CASCADE concerns.
  */
 
-import type { BrainEngine } from '../core/engine.ts';
-import * as db from '../core/db.ts';
-import { loadConfig, toEngineConfig } from '../core/config.ts';
-import { TYPE_ENUM } from '../core/types-enum.ts';
+import type { BrainEngine } from '../src/core/engine.ts';
+import * as db from '../src/core/db.ts';
+import { loadConfig, toEngineConfig } from '../src/core/config.ts';
+import { TYPE_ENUM } from './types-enum.ts';
 
 const QUOTE_STRIP_RE = /^['"]+(.*?)['"]+$/;
 
@@ -196,4 +196,13 @@ export async function runRepairTypeFieldCli(args: string[]): Promise<void> {
   if (result.rows_repaired === 0 && result.rows_quarantined === 0) {
     console.log('Nothing to repair.');
   }
+}
+
+// CLI entry — invoked directly as `bun scripts/repair-type-field.ts [--apply|--dry-run|--json]`.
+// (Moved from src/commands/ per LOCAL_PATCHES.md triage 2026-05-23.)
+if (import.meta.main) {
+  runRepairTypeFieldCli(process.argv.slice(2)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
