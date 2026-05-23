@@ -41,3 +41,25 @@ test/fixtures/pglite-snapshot.version
 
 # Private brain reports — never check these in (per CLAUDE.md privacy rule)
 reports/network-intelligence/
+
+# --- local scratch (added 2026-05-23 by upgrade-automation) ---
+# These patterns caught untracked debugging artifacts that blocked the
+# v0.35→v0.40 rebase. Match in repo root + nested dirs.
+*.bak
+*.bak-*
+*.mjs
+!eslint.config.mjs
+!**/test/**/*.mjs
+
+# Common ad-hoc debugging filenames
+/cancel.mjs
+/check_timeout.mjs
+/diag.mjs
+/recheck.mjs
+/sd2.mjs
+/test_search*.mjs
+/analyze_dupes.ts
+/scratch/
+
+# upgrade.sh artifacts
+/tmp/upgrade-*.log
