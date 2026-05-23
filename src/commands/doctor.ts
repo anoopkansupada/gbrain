@@ -3796,7 +3796,7 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
     if (!rows || rows.length === 0) {
       checks.push({ name: 'pages_malformed_type', status: 'ok', message: 'No malformed type values' });
     } else {
-      const sample = rows.slice(0, 3).map((r: { slug: string; type: string }) => `${r.slug} (type=${JSON.stringify(r.type)})`).join(', ');
+      const sample = (rows as Array<{ slug: string; type: string }>).slice(0, 3).map((r) => `${r.slug} (type=${JSON.stringify(r.type)})`).join(', ');
       checks.push({
         name: 'pages_malformed_type',
         status: 'fail',
