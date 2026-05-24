@@ -436,8 +436,14 @@ export function makeSubagentHandler(deps: SubagentDeps) {
       // covers the whole request. A mid-call renewal loop would add
       // complexity; for v0.15 we lean on the 120s TTL + abort-on-signal.
       try {
+        // Strip the gateway-format `provider:` prefix; the Anthropic SDK
+        // expects the bare model ID (e.g. `claude-haiku-4-5-20251001`) and
+        // returns 404 if it sees `anthropic:claude-...`.
+        const apiModel = model.includes(':')
+          ? model.slice(model.indexOf(':') + 1)
+          : model;
         const params: Anthropic.MessageCreateParamsNonStreaming = {
-          model,
+          model: apiModel,
           max_tokens: 4096,
           system: [
             { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },

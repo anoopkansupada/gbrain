@@ -49,9 +49,9 @@ export interface ResolveModelOpts {
 
 /** Default aliases shipped in code. Users override via `models.aliases.<name>` config. */
 export const DEFAULT_ALIASES: Record<string, string> = {
-  opus:   'claude-opus-4-7',
-  sonnet: 'claude-sonnet-4-6',
-  haiku:  'claude-haiku-4-5-20251001',
+  opus:   'anthropic:claude-opus-4-7',
+  sonnet: 'anthropic:claude-sonnet-4-6',
+  haiku:  'anthropic:claude-haiku-4-5-20251001',
   gemini: 'gemini-3-pro',
   gpt:    'gpt-5',
 };
@@ -66,10 +66,10 @@ export const DEFAULT_ALIASES: Record<string, string> = {
  * Users override via `gbrain config set models.tier.<tier> <model>`.
  */
 export const TIER_DEFAULTS: Record<ModelTier, string> = {
-  utility:   'claude-haiku-4-5-20251001',
-  reasoning: 'claude-sonnet-4-6',
-  deep:      'claude-opus-4-7',
-  subagent:  'claude-sonnet-4-6',
+  utility:   'anthropic:claude-haiku-4-5-20251001',
+  reasoning: 'anthropic:claude-sonnet-4-6',
+  deep:      'anthropic:claude-opus-4-7',
+  subagent:  'anthropic:claude-sonnet-4-6',
 };
 
 /**
