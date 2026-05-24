@@ -120,6 +120,16 @@ describe('companyNameToSlug', () => {
     expect(companyNameToSlug('')).toBeNull();
     expect(companyNameToSlug('   ')).toBeNull();
   });
+
+  test('generic-org names → null (not unresolved targets)', () => {
+    expect(companyNameToSlug('Self-employed')).toBeNull();
+    expect(companyNameToSlug('Self Employed')).toBeNull();
+    expect(companyNameToSlug('Freelance')).toBeNull();
+    expect(companyNameToSlug('Stealth')).toBeNull();
+    expect(companyNameToSlug('Stealth Startup')).toBeNull();
+    expect(companyNameToSlug('Various Startups')).toBeNull();
+    expect(companyNameToSlug('Retired')).toBeNull();
+  });
 });
 
 // ─────────────────────────────── phase tests ───────────────────────────────
@@ -304,6 +314,89 @@ describe('runPhaseInferLinks', () => {
       expect(r.details.links_inferred).toBe(1);
       const fm = await getFrontmatter('companies/test-firm');
       expect(fm.hash_owner).toBe('[[people/petri-basson]]');
+    });
+  });
+
+  // ─── Generic-org skip-list (cohort #1 from 2026-05-24 investigation) ───
+  describe('generic-org skip-list', () => {
+    test('current_company "Self-employed" → no infer, no unresolved', async () => {
+      await seedPage('people/freelancer-1', { current_company: 'Self-employed' });
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(0);
+      expect(r.details.links_unresolved).toBe(0);
+    });
+
+    test('current_company "Stealth Startup" → no infer, no unresolved', async () => {
+      await seedPage('people/stealth-1', { current_company: 'Stealth Startup' });
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(0);
+      expect(r.details.links_unresolved).toBe(0);
+    });
+  });
+
+  // ─── Alias resolution (cohort #3 from 2026-05-24 investigation) ───
+  describe('alias resolution', () => {
+    test('corporate-suffix stripped: "mysten-labs" → companies/mysten when only mysten exists', async () => {
+      await seedPage('companies/mysten', {});
+      await seedPage('people/sui-dev', { current_company: 'Mysten Labs' });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/sui-dev');
+      expect(fm.current_company).toBe('[[companies/mysten]]');
+    });
+
+    test('exact slug wins over suffix-stripped variant', async () => {
+      await seedPage('companies/mysten', {});
+      await seedPage('companies/mysten-labs', {});
+      await seedPage('people/sui-dev-2', { current_company: 'Mysten Labs' });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/sui-dev-2');
+      expect(fm.current_company).toBe('[[companies/mysten-labs]]');
+    });
+
+    test('aka frontmatter match: "AWS" resolves to companies/amazon-web-services via aka', async () => {
+      await seedPage('companies/amazon-web-services', { aka: 'AWS' });
+      await seedPage('people/aws-eng', { current_company: 'AWS' });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/aws-eng');
+      expect(fm.current_company).toBe('[[companies/amazon-web-services]]');
+    });
+
+    test('aliases array match: "JPMorgan Chase & Co." resolves via aliases[]', async () => {
+      await seedPage('companies/jpmorgan', { aliases: ['JPMorgan Chase', 'JPMorgan Chase & Co.', 'JPM'] });
+      await seedPage('people/banker', { current_company: 'JPMorgan Chase & Co.' });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/banker');
+      expect(fm.current_company).toBe('[[companies/jpmorgan]]');
+    });
+
+    test('email-domain alias: walkersglobal.com resolves to companies/walkers via aka', async () => {
+      await seedPage('companies/walkers', { aka: 'walkersglobal' });
+      await seedPage('people/cayman-lawyer', { email: 'partner@walkersglobal.com' });
+
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(1);
+
+      const fm = await getFrontmatter('people/cayman-lawyer');
+      expect(fm.email_domain).toBe('[[companies/walkers]]');
+    });
+
+    test('no exact, no suffix-strip match, no alias → still unresolved', async () => {
+      await seedPage('people/missing-target', { current_company: 'CompanyDoesNotExist' });
+      const r = await runPhaseInferLinks(engine, {});
+      expect(r.details.links_inferred).toBe(0);
+      expect(r.details.links_unresolved).toBe(1);
     });
   });
 });

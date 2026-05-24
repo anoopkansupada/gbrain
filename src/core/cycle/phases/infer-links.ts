@@ -73,6 +73,36 @@ const DEFAULT_GENERIC_DOMAINS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Display-name strings that map to no specific employer. "Self-employed",
+ * "Freelance", "Stealth Startup" tell us nothing about who someone works
+ * for. Suppresses spurious `links_unresolved` counts during inference;
+ * NOT a write blocklist. Keys are matched against both the trimmed
+ * lowercase display string and its slugified form.
+ */
+const DEFAULT_GENERIC_ORG_NAMES: ReadonlySet<string> = new Set([
+  'self-employed',
+  'self employed',
+  'selfemployed',
+  'freelance',
+  'freelancer',
+  'independent',
+  'independent-consultant',
+  'stealth',
+  'stealth-startup',
+  'stealth-mode',
+  'various-startups',
+  'various',
+  'retired',
+  'student',
+  'unemployed',
+  'consultant',
+  'none',
+  'na',
+  'n-a',
+  'n/a',
+]);
+
+/**
  * Email/domain string → `companies/<slug>` slug. Returns null if generic
  * or unresolvable. Exported so importers (recipes) can share the rule.
  */
@@ -118,10 +148,14 @@ export function domainToCompanySlug(
  * `current_company:` / `at_company:` fields that hold display strings
  * rather than email domains.
  */
-export function companyNameToSlug(name: string): string | null {
+export function companyNameToSlug(
+  name: string,
+  genericOrgs: ReadonlySet<string> = DEFAULT_GENERIC_ORG_NAMES,
+): string | null {
   if (!name) return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
+  if (genericOrgs.has(trimmed.toLowerCase())) return null;
   const slug = trimmed
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
@@ -130,6 +164,7 @@ export function companyNameToSlug(name: string): string | null {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
   if (!slug) return null;
+  if (genericOrgs.has(slug)) return null;
   return `companies/${slug}`;
 }
 
@@ -240,11 +275,17 @@ export async function runPhaseInferLinks(
       ) {
         const slug = domainToCompanySlug(emailVal, genericDomains);
         if (slug) {
-          const exists = await targetExists(engine, slug);
-          if (exists) {
+          // Pass the bare domain label (e.g., "walkersglobal") to alias
+          // lookup, not the full domain — `aka:` values are stored as
+          // labels, not as domains with TLDs.
+          const displayName = slug.startsWith('companies/')
+            ? slug.slice('companies/'.length)
+            : undefined;
+          const resolved = await resolveCompanySlug(engine, slug, displayName);
+          if (resolved) {
             // Keep email as a plain string (it's a value, not a slug ref);
             // emit a separate `email_domain:` field with the wikilink wrap.
-            updates['email_domain'] = JSON.stringify(`[[${slug}]]`);
+            updates['email_domain'] = JSON.stringify(`[[${resolved}]]`);
             fieldsTouched.push('email_domain');
             linksInferred += 1;
           } else {
@@ -259,9 +300,9 @@ export async function runPhaseInferLinks(
         if (typeof val !== 'string' || !val.trim() || valueIsAlreadyWikilink(val)) continue;
         const slug = companyNameToSlug(val);
         if (!slug) continue;
-        const exists = await targetExists(engine, slug);
-        if (exists) {
-          updates[key] = JSON.stringify(`[[${slug}]]`);
+        const resolved = await resolveCompanySlug(engine, slug, val);
+        if (resolved) {
+          updates[key] = JSON.stringify(`[[${resolved}]]`);
           fieldsTouched.push(key);
           linksInferred += 1;
         } else {
@@ -302,9 +343,9 @@ export async function runPhaseInferLinks(
             wrapped.push(item);
             continue;
           }
-          const exists = await targetExists(engine, slug);
-          if (exists) {
-            wrapped.push(`[[${slug}]]`);
+          const resolved = await resolveCompanySlug(engine, slug, item);
+          if (resolved) {
+            wrapped.push(`[[${resolved}]]`);
             touchedThisKey = true;
             linksInferred += 1;
           } else {
@@ -393,4 +434,62 @@ async function targetExists(engine: BrainEngine, slug: string): Promise<boolean>
   } catch {
     return false;
   }
+}
+
+/**
+ * Common corporate suffixes appended to slug bases that we strip when the
+ * exact slug misses. "mysten-labs" → also try "mysten"; "stripe-inc" →
+ * also try "stripe". Keep additions conservative — overlap with real
+ * single-word company names risks mis-redirecting.
+ */
+const COMPANY_SUFFIX_RE = /-(labs|inc|llc|ltd|co|corp|company|holdings|group|partners|capital|ventures)$/;
+
+/**
+ * Resolve a candidate `companies/<slug>` to an existing page slug, trying:
+ *   1. exact match
+ *   2. corporate-suffix stripped variant (mysten-labs → mysten)
+ *   3. case-insensitive match against `aka:` (string) or `aliases:` (array)
+ *      frontmatter on any companies/* page
+ * Returns the resolved slug, or null if no match. People-slug callers
+ * still use targetExists directly — alias resolution is company-scoped.
+ */
+async function resolveCompanySlug(
+  engine: BrainEngine,
+  candidateSlug: string,
+  displayName?: string,
+): Promise<string | null> {
+  if (await targetExists(engine, candidateSlug)) return candidateSlug;
+  if (candidateSlug.startsWith('companies/')) {
+    const base = candidateSlug.slice('companies/'.length);
+    const stripped = base.replace(COMPANY_SUFFIX_RE, '');
+    if (stripped && stripped !== base) {
+      const alt = `companies/${stripped}`;
+      if (await targetExists(engine, alt)) return alt;
+    }
+  }
+  if (displayName && displayName.trim()) {
+    const needle = displayName.trim().toLowerCase();
+    try {
+      const rows = await engine.executeRaw<{ slug: string }>(
+        `SELECT slug FROM pages
+          WHERE deleted_at IS NULL
+            AND slug LIKE 'companies/%'
+            AND (
+              lower(frontmatter->>'aka') = $1
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(
+                  CASE jsonb_typeof(frontmatter->'aliases')
+                    WHEN 'array' THEN frontmatter->'aliases'
+                    ELSE '[]'::jsonb
+                  END
+                ) a WHERE lower(a) = $1
+              )
+            )
+          LIMIT 1`,
+        [needle],
+      );
+      if (rows.length > 0) return rows[0].slug;
+    } catch { /* alias lookup non-fatal */ }
+  }
+  return null;
 }
