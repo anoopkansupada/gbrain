@@ -191,12 +191,18 @@ export async function runAutopilot(engine: BrainEngine, args: string[]) {
 
   if (spawnManagedWorker) {
     const cliPath = resolveGbrainCliPath();
-    // Inject the RSS watchdog default (2048 MB) for the autopilot-supervised
-    // worker. Bare `gbrain jobs work` has no default; the supervisor and
-    // autopilot are the production paths that opt in.
+    // RSS watchdog for the autopilot-supervised worker. Default 4096 MB
+    // (Mini has 16GB); heavy source cycles (10k+ pages) blow past the old
+    // 2048 MB cap, OOM-kill the worker, and after maxCrashes the autopilot
+    // shuts down — perma-failing cycle_freshness. Overridable via
+    // `autopilot.worker_max_rss_mb`.
+    const rssRaw = await engine.getConfig('autopilot.worker_max_rss_mb').catch(() => null);
+    const maxRssMb = typeof rssRaw === 'string' && Number.isFinite(Number(rssRaw)) && Number(rssRaw) > 0
+      ? String(Math.floor(Number(rssRaw)))
+      : '4096';
     childSupervisor = new ChildWorkerSupervisor({
       cliPath,
-      args: ['jobs', 'work', '--max-rss', '2048'],
+      args: ['jobs', 'work', '--max-rss', maxRssMb],
       // process.env clone; autopilot doesn't gate shell jobs the way the
       // standalone supervisor does (autopilot is the operator-trust path).
       env: { ...process.env },
@@ -212,7 +218,7 @@ export async function runAutopilot(engine: BrainEngine, args: string[]) {
         // existing logs see the same lines.
         if (event.kind === 'worker_spawned') {
           console.log(
-            `[autopilot] Minions worker spawned (pid: ${event.pid}, watchdog: 2048MB${event.tini ? ', tini: active' : ''})`,
+            `[autopilot] Minions worker spawned (pid: ${event.pid}, watchdog: ${maxRssMb}MB${event.tini ? ', tini: active' : ''})`,
           );
         } else if (event.kind === 'worker_spawn_failed') {
           console.error(
