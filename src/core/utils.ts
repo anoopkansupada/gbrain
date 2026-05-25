@@ -28,6 +28,42 @@ export function validateSlug(slug: string): string {
 }
 
 /**
+ * Entity-slug shape gate (WS-5, 2026-05-25). Pure check — returns ok, or a
+ * reason + paste-ready suggestion. putPage rejects only NEW people/* and
+ * companies/* pages that fail, honoring a `slug_violation_note` override and
+ * always allowing updates to existing (legacy) pages.
+ *
+ * Why: goals/standing/gbrain-compile-itself PC3 — single-token `people/noah`
+ * and deal-noise `companies/almost-filled` catchalls are the inflow that makes
+ * graph cleanup futile. Importers gate at PR #53; this closes the server
+ * put_page path (calendar-enrich, extractors, raw MCP). Companies are gated by
+ * SLUG SHAPE only, never by source (2,845 real companies are AngelList-sourced).
+ */
+const COMPANY_JUNK_RE = /(^|-)(last-call|closing-soon|closing-today|closing-call|almost-filled|filling-up|oversubscribed|now-final|re-investing)(-|$)|^(a|the|our|this)-|^al-funds?-/;
+
+export function validateEntitySlugShape(
+  slug: string,
+): { ok: true } | { ok: false; reason: string; suggestion: string } {
+  const m = slug.match(/^(people|companies)\/(.+)$/);
+  if (!m) return { ok: true };
+  const [, kind, rest] = m;
+  if (kind === 'people') {
+    const tokens = rest.split('-').filter(Boolean);
+    if (tokens.length < 2) {
+      return { ok: false, reason: `people slug must be first-last (>=2 hyphen tokens); got single token "${rest}"`, suggestion: 'Use people/<first>-<last>.' };
+    }
+    if (tokens.some(t => t.length < 2)) {
+      return { ok: false, reason: `people slug has an initial-only token in "${rest}"; needs a full surname`, suggestion: 'Replace the single-letter token with the full surname.' };
+    }
+    return { ok: true };
+  }
+  if (COMPANY_JUNK_RE.test(rest)) {
+    return { ok: false, reason: `companies slug looks like deal-noise/article fragment ("${rest}")`, suggestion: 'If this is a real company use its canonical name slug; if it is news/deal-noise write it as type=article-clipping, not companies/*.' };
+  }
+  return { ok: true };
+}
+
+/**
  * SHA-256 hash of page content, used for import idempotency.
  * Hashes all PageInput fields to match importFromContent's hash algorithm.
  */

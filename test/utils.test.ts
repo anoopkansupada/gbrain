@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { validateSlug, contentHash, parseEmbedding, tryParseEmbedding, rowToPage, rowToChunk, rowToSearchResult } from '../src/core/utils.ts';
+import { validateSlug, validateEntitySlugShape, contentHash, parseEmbedding, tryParseEmbedding, rowToPage, rowToChunk, rowToSearchResult } from '../src/core/utils.ts';
 
 describe('validateSlug', () => {
   test('accepts valid slugs', () => {
@@ -182,5 +182,67 @@ describe('rowToSearchResult', () => {
     });
     expect(typeof r.score).toBe('number');
     expect(r.score).toBe(0.95);
+  });
+});
+
+
+describe('validateEntitySlugShape (WS-5 entity slug gate)', () => {
+  const ok = (slug: string) => expect(validateEntitySlugShape(slug).ok).toBe(true);
+  const bad = (slug: string) => expect(validateEntitySlugShape(slug).ok).toBe(false);
+
+  test('accepts well-formed people slugs', () => {
+    ok('people/sarah-chen');
+    ok('people/petri-basson');
+    ok('people/mary-jo-white');
+  });
+
+  test('rejects single-token people slugs', () => {
+    bad('people/noah');
+    bad('people/rena');
+    bad('people/jburke8');
+    bad('people/adamjmichalski');
+  });
+
+  test('rejects initial-only token (needs full surname)', () => {
+    bad('people/bobby-z');
+    bad('people/mike-d');
+  });
+
+  test('accepts real company slugs regardless of token count', () => {
+    ok('companies/stripe');
+    ok('companies/polychain-capital');
+    ok('companies/sullivan-cromwell');
+    ok('companies/recursal-ai');
+  });
+
+  test('rejects deal-noise / article-fragment company slugs', () => {
+    bad('companies/almost-filled');
+    bad('companies/agnikul-last-call');
+    bad('companies/algen-bio-closing-soon');
+    bad('companies/al-funds-investing-finn');
+    bad('companies/a-new-approach-to-multi');
+  });
+
+  test('drift-cohort regression set all rejected on create', () => {
+    bad('people/rena');
+    bad('companies/almost-filled');
+    bad('people/noah');
+    bad('people/bobby-z');
+  });
+
+  test('ignores non-entity slugs', () => {
+    ok('concepts/rag');
+    ok('tasks/foo');
+    ok('daily/calendar/2026-05-25');
+    ok('a-bare-slug');
+  });
+
+  test('reason + suggestion present on rejection', () => {
+    const r = validateEntitySlugShape('people/noah');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason.length).toBeGreaterThan(0);
+      expect(r.suggestion.length).toBeGreaterThan(0);
+    }
   });
 });
