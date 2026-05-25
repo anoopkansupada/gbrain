@@ -74,6 +74,15 @@ const WIKILINK_RE = new RegExp(
 );
 
 /**
+ * Single-value anchored variant of WIKILINK_RE. A frontmatter value that is
+ * exactly an explicit `[[dir/slug]]` (optionally `|Display`). Group 1 = dir/slug.
+ * Reuses WIKILINK_RE.source (DRY) so the dir whitelist + anchor/display handling
+ * stay in one place. Used by extractFrontmatterLinks to skip the fuzzy resolver
+ * for values that already carry a canonical slug (WS-3, 2026-05-25).
+ */
+const WRAPPED_WIKILINK_RE = new RegExp(`^${WIKILINK_RE.source}$`);
+
+/**
  * v0.17.0: qualified wikilink `[[source-id:dir/slug]]` or
  * `[[source-id:dir/slug|Display Text]]`. The source-id segment pins the
  * target to a specific sources(id) row, overriding the local-first
@@ -798,7 +807,23 @@ export async function extractFrontmatterLinks(
         }
         if (!name) continue;   // skip numbers, nulls, malformed objects
 
-        const resolved = await resolver.resolve(name, mapping.dirHint);
+        // WS-3 (2026-05-25): a frontmatter value may already wrap an explicit
+        // wikilink, e.g. participants: ["[[people/carl-baker]]"]. The fuzzy
+        // resolver treats the literal "[[...]]" as a display name and misses,
+        // leaving real people orphaned. Strip the wrapper: an explicit dir/slug
+        // is used directly (operations.ts filters candidates to existing slugs,
+        // so this can't create a dead link); a display-only wrapper falls through
+        // to the resolver with the inner text.
+        let resolved: string | null;
+        const wrapped = name.match(WRAPPED_WIKILINK_RE);
+        if (wrapped) {
+          resolved = wrapped[1];
+        } else if (name.startsWith('[[') && name.endsWith(']]')) {
+          const inner = name.slice(2, -2).split('|')[0].trim();
+          resolved = await resolver.resolve(inner, mapping.dirHint);
+        } else {
+          resolved = await resolver.resolve(name, mapping.dirHint);
+        }
         if (!resolved) {
           unresolved.push({ field, name });
           continue;
