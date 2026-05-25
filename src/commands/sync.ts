@@ -708,6 +708,17 @@ async function performSyncInner(engine: BrainEngine, opts: SyncOpts): Promise<Sy
       detachedWorkingTreeManifest.renamed.length > 0);
 
   if (lastCommit === headCommit && !versionMismatch && !versionNeverSet && !hasDetachedWorkingTreeChanges) {
+    // Stamp last_sync_at even on a no-op pull: "synced" = "successfully
+    // verified current", not "content changed". Without this, a quiet repo
+    // (no new commits) is flagged stale forever by sync_freshness.
+    if (opts.sourceId) {
+      try {
+        await engine.executeRaw(
+          `UPDATE sources SET last_sync_at = now() WHERE id = $1`,
+          [opts.sourceId],
+        );
+      } catch { /* best-effort; up-to-date result stands regardless */ }
+    }
     return {
       status: 'up_to_date',
       fromCommit: lastCommit,
