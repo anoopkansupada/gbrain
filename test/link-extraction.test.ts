@@ -829,3 +829,61 @@ describe("v0.18.0 migration v22 — links_resolution_type", () => {
   });
 });
 
+
+
+describe('extractFrontmatterLinks — WS-3 wikilink-wrapped participants', () => {
+  const pages = {
+    'people/garry': 'people/garry',
+    'people/carl-baker': 'people/carl-baker',
+  };
+  const resolver = makeFixtureResolver(pages);
+
+  test('wrapped explicit slug [[people/carl-baker]] -> mentions edge, bypasses fuzzy', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'correspondence/x', 'correspondence' as never,
+      { participants: ['[[people/carl-baker]]'] }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      fromSlug: 'correspondence/x',
+      targetSlug: 'people/carl-baker',
+      linkType: 'mentions',
+    });
+  });
+
+  test('wrapped slug with display [[people/garry|Garry T]] -> target slug', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'meeting/y', 'meeting' as never,
+      { participants: ['[[people/garry|Garry T]]'] }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetSlug).toBe('people/garry');
+  });
+
+  test('display-only wrapper [[Garry]] -> falls through to resolver', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'meeting/y', 'meeting' as never,
+      { participants: ['[[Garry]]'] }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetSlug).toBe('people/garry');
+  });
+
+  test('bare name (regression) still resolves via resolver', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'meeting/y', 'meeting' as never,
+      { participants: ['Garry'] }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetSlug).toBe('people/garry');
+  });
+
+  test('wrapped slug to non-fixture page still emits candidate (existence enforced downstream)', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'meeting/y', 'meeting' as never,
+      { participants: ['[[people/ghost-nobody]]'] }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetSlug).toBe('people/ghost-nobody');
+  });
+});
