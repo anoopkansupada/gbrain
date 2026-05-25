@@ -37,7 +37,7 @@ import type {
   EmotionalWeightInputRow, EmotionalWeightWriteRow,
   DomainBankSampleOpts, CorpusSampleOpts, DomainBankRow,
 } from './types.ts';
-import { validateSlug, contentHash, rowToPage, rowToChunk, rowToSearchResult, takeRowToTake } from './utils.ts';
+import { validateSlug, validateEntitySlugShape, contentHash, rowToPage, rowToChunk, rowToSearchResult, takeRowToTake } from './utils.ts';
 import { deriveResolutionTuple, finalizeScorecard } from './takes-resolution.ts';
 import { normalizeWeightForStorage } from './takes-fence.ts';
 import { GBrainError, PAGE_SORT_SQL } from './types.ts';
@@ -740,6 +740,18 @@ export class PGLiteEngine implements BrainEngine {
     const hash = page.content_hash || contentHash(page);
     const frontmatter = page.frontmatter || {};
     const sourceId = opts?.sourceId ?? 'default';
+
+    // WS-5 (2026-05-25): reject NEW catchall entity slugs at write time (parity
+    // with postgres-engine). Updates to existing pages + slug_violation_note pass.
+    {
+      const shape = validateEntitySlugShape(slug);
+      if (!shape.ok && !frontmatter.slug_violation_note) {
+        const probe = await this.db.query('SELECT 1 FROM pages WHERE slug = $1 AND source_id = $2 LIMIT 1', [slug, sourceId]);
+        if (probe.rows.length === 0) {
+          throw new Error(`Rejected new entity slug "${slug}": ${shape.reason} ${shape.suggestion} To override, set frontmatter.slug_violation_note explaining why this slug is canonical.`);
+        }
+      }
+    }
 
     // v0.18.0 Step 5+: source_id is now in the INSERT column list so multi-
     // source callers land on the intended (source_id, slug) row. Omitting it

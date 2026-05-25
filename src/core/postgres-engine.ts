@@ -50,7 +50,7 @@ import { computeAnomaliesFromBuckets } from './cycle/anomaly.ts';
 import * as db from './db.ts';
 import { ConnectionManager } from './connection-manager.ts';
 import { logConnectionEvent } from './connection-audit.ts';
-import { validateSlug, contentHash, rowToPage, rowToChunk, rowToSearchResult, parseEmbedding, tryParseEmbedding, takeRowToTake } from './utils.ts';
+import { validateSlug, validateEntitySlugShape, contentHash, rowToPage, rowToChunk, rowToSearchResult, parseEmbedding, tryParseEmbedding, takeRowToTake } from './utils.ts';
 import { resolveBoostMap, resolveHardExcludes } from './search/source-boost.ts';
 import { buildSourceFactorCase, buildHardExcludeClause, buildVisibilityClause, buildRecencyComponentSql } from './search/sql-ranking.ts';
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_DIMENSIONS } from './ai/defaults.ts';
@@ -810,6 +810,20 @@ export class PostgresEngine implements BrainEngine {
     const hash = page.content_hash || contentHash(page);
     const frontmatter = page.frontmatter || {};
     const sourceId = opts?.sourceId ?? 'default';
+
+    // WS-5 (2026-05-25): reject NEW catchall entity slugs at write time. Skip
+    // updates to existing pages (legacy bad slugs must still be editable) and
+    // honor frontmatter.slug_violation_note. The existence probe fires ONLY for
+    // the rare entity slug that fails the shape check.
+    {
+      const shape = validateEntitySlugShape(slug);
+      if (!shape.ok && !frontmatter.slug_violation_note) {
+        const existing = await this.sql`SELECT 1 FROM pages WHERE slug = ${slug} AND source_id = ${sourceId} LIMIT 1`;
+        if (existing.length === 0) {
+          throw new Error(`Rejected new entity slug "${slug}": ${shape.reason} ${shape.suggestion} To override, set frontmatter.slug_violation_note explaining why this slug is canonical.`);
+        }
+      }
+    }
 
     // v0.18.0 Step 5+: source_id is now in the INSERT column list so multi-
     // source callers actually land on the (source_id, slug) row they intend.
