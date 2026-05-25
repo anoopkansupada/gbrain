@@ -3948,7 +3948,12 @@ export class PostgresEngine implements BrainEngine {
           GREATEST((SELECT count(*) FROM entity_pages), 1)::float as link_coverage,
         (SELECT count(*) FROM entity_pages e
          WHERE EXISTS (SELECT 1 FROM timeline_entries te WHERE te.page_id = e.id))::float /
-          GREATEST((SELECT count(*) FROM entity_pages), 1)::float as timeline_coverage
+          GREATEST((SELECT count(*) FROM entity_pages), 1)::float as timeline_coverage,
+        (SELECT count(*) FROM entity_pages e
+         WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.to_page_id = e.id)
+           AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_page_id = e.id)
+        ) as entity_orphan_pages,
+        (SELECT count(*) FROM entity_pages) as entity_count
     `;
 
     const connected = await sql`
@@ -3967,10 +3972,22 @@ export class PostgresEngine implements BrainEngine {
     const linkCount = Number(h.link_count);
     const pagesWithTimeline = Number(h.pages_with_timeline);
 
-    // brain_score: 0-100 weighted average
-    const linkDensity = pageCount > 0 ? Math.min(linkCount / pageCount, 1) : 0;
-    const timelineCoverageWhole = pageCount > 0 ? Math.min(pagesWithTimeline / pageCount, 1) : 0;
-    const noOrphans = pageCount > 0 ? 1 - (orphanPages / pageCount) : 1;
+    // brain_score: 0-100 weighted average.
+    // v0.40.x: link/timeline/orphan components are ENTITY-SCOPED (person+company),
+    // not whole-corpus. Raw orphan_pages counts calendar-index / correspondence /
+    // telegram / signal system+log pages that were never meant to be graph entities;
+    // dividing the score by them is a Goodhart trap (see goals/standing/
+    // gbrain-compile-itself PC3). The headline now reflects the relationship graph.
+    // Raw orphan_pages / linkCount / pagesWithTimeline stay in the payload as
+    // watch-numbers only.
+    const entityCount = Number(h.entity_count);
+    const entityOrphanPages = Number(h.entity_orphan_pages);
+    // linkDensity now carries entity inbound-link coverage (fraction of person+
+    // company pages with at least one inbound edge); timelineCoverageWhole carries
+    // entity timeline coverage. Variable names kept to minimize downstream churn.
+    const linkDensity = Number(h.link_coverage);
+    const timelineCoverageWhole = Number(h.timeline_coverage);
+    const noOrphans = entityCount > 0 ? 1 - (entityOrphanPages / entityCount) : 1;
     const noDeadLinks = pageCount > 0 ? 1 - Math.min(deadLinks / pageCount, 1) : 1;
     // Per-component points. Sum equals brainScore by construction.
     //
@@ -3997,6 +4014,8 @@ export class PostgresEngine implements BrainEngine {
       dead_links: deadLinks,
       link_coverage: Number(h.link_coverage),
       timeline_coverage: Number(h.timeline_coverage),
+      entity_orphan_pages: entityOrphanPages,
+      entity_count: entityCount,
       most_connected: (connected as unknown as { slug: string; link_count: number }[]).map(c => ({
         slug: c.slug,
         link_count: Number(c.link_count),

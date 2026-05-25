@@ -1085,6 +1085,10 @@ export interface BrainHealth {
   link_coverage: number;
   /** Fraction of entity pages (person/company) with >= 1 structured timeline entry. */
   timeline_coverage: number;
+  /** Entity pages (person/company) with zero inbound AND zero outbound links. Drives the orphan score component. */
+  entity_orphan_pages: number;
+  /** Total entity pages (person/company) — denominator for the entity-scoped score components. */
+  entity_count: number;
   /** Top 5 entities by total link count (in + out). */
   most_connected: Array<{ slug: string; link_count: number }>;
   /**

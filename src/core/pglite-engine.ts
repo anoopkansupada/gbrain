@@ -3960,7 +3960,12 @@ export class PGLiteEngine implements BrainEngine {
           GREATEST((SELECT count(*) FROM entity_pages), 1)::float as link_coverage,
         (SELECT count(*) FROM entity_pages e
          WHERE EXISTS (SELECT 1 FROM timeline_entries te WHERE te.page_id = e.id))::float /
-          GREATEST((SELECT count(*) FROM entity_pages), 1)::float as timeline_coverage
+          GREATEST((SELECT count(*) FROM entity_pages), 1)::float as timeline_coverage,
+        (SELECT count(*) FROM entity_pages e
+         WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.to_page_id = e.id)
+           AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_page_id = e.id)
+        ) as entity_orphan_pages,
+        (SELECT count(*) FROM entity_pages) as entity_count
     `);
 
     // Top 5 most connected entities by total link count (in + out).
@@ -3981,9 +3986,15 @@ export class PGLiteEngine implements BrainEngine {
     const linkCount = Number(r.link_count);
     const pagesWithTimeline = Number(r.pages_with_timeline);
 
-    const linkDensity = pageCount > 0 ? Math.min(linkCount / pageCount, 1) : 0;
-    const timelineCoverageDensity = pageCount > 0 ? Math.min(pagesWithTimeline / pageCount, 1) : 0;
-    const noOrphans = pageCount > 0 ? 1 - (orphanPages / pageCount) : 1;
+    // v0.40.x: entity-scoped components (parity with postgres-engine). Raw
+    // orphan_pages counts system/log pages and is a Goodhart trap; the score
+    // reflects the person+company relationship graph. See goals/standing/
+    // gbrain-compile-itself PC3.
+    const entityCount = Number(r.entity_count);
+    const entityOrphanPages = Number(r.entity_orphan_pages);
+    const linkDensity = Number(r.link_coverage);
+    const timelineCoverageDensity = Number(r.timeline_coverage);
+    const noOrphans = entityCount > 0 ? 1 - (entityOrphanPages / entityCount) : 1;
     const noDeadLinks = pageCount > 0 ? 1 - Math.min(deadLinks / pageCount, 1) : 1;
     // Bug 11 — per-component points. Sum equals brainScore by construction
     // so `doctor` can render a breakdown that adds up to the total.
@@ -4011,6 +4022,8 @@ export class PGLiteEngine implements BrainEngine {
       dead_links: deadLinks,
       link_coverage: Number(r.link_coverage),
       timeline_coverage: Number(r.timeline_coverage),
+      entity_orphan_pages: entityOrphanPages,
+      entity_count: entityCount,
       most_connected: (connected as { slug: string; link_count: number }[]).map(c => ({
         slug: c.slug,
         link_count: Number(c.link_count),
