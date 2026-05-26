@@ -52,6 +52,7 @@ import { ConnectionManager } from './connection-manager.ts';
 import { logConnectionEvent } from './connection-audit.ts';
 import { validateSlug, validateEntitySlugShape, contentHash, rowToPage, rowToChunk, rowToSearchResult, parseEmbedding, tryParseEmbedding, takeRowToTake } from './utils.ts';
 import { parseEntitySlug, findPhoneticCollision, type PhoneticCollision } from './entity-phonetics.ts';
+import { appendNameCollision } from './name-collision-queue.ts';
 import { resolveBoostMap, resolveHardExcludes } from './search/source-boost.ts';
 import { buildSourceFactorCase, buildHardExcludeClause, buildVisibilityClause, buildRecencyComponentSql } from './search/sql-ranking.ts';
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_DIMENSIONS } from './ai/defaults.ts';
@@ -806,10 +807,15 @@ export class PostgresEngine implements BrainEngine {
   }
 
   /**
-   * Record a Guard-1 phonetic rejection as a task page for human triage.
-   * Best-effort: the caller swallows failures so a queue-write hiccup never
-   * masks the (more important) rejection. The slug is non-entity, so it
-   * sails through both write-time gates without recursion.
+   * Record a Guard-1 phonetic rejection for human triage. Appends one JSON
+   * line to ~/.gbrain/name-collision-review.jsonl.
+   *
+   * Why a file and not a gbrain page: the MCP put_page path runs through
+   * importFromContent inside a transaction, so a nested putPage written here
+   * rolls back together with the rejection throw and never persists. The
+   * append-only file is transaction-independent and durable for every caller
+   * (MCP + in-process importers). Best-effort — the caller swallows failures
+   * so a queue hiccup never masks the rejection itself.
    */
   private async queueNameCollision(
     rejectedSlug: string,
@@ -817,33 +823,7 @@ export class PostgresEngine implements BrainEngine {
     page: PageInput,
     sourceId: string,
   ): Promise<void> {
-    const date = new Date().toISOString().slice(0, 10);
-    const reviewSlug = `name_collision_review/${date}/${rejectedSlug.replace(/\//g, '-')}`;
-    const body = [
-      `# Name collision: \`${rejectedSlug}\` rejected at write time`,
-      '',
-      `- **Rejected slug**: \`${rejectedSlug}\``,
-      `- **Likely canonical**: [[${hit.collidesWith}]]`,
-      `- **Match reason**: ${hit.reason} (score ${hit.score.toFixed(2)})`,
-      `- **Attempted title**: ${page.title ?? '(none)'}`,
-      '',
-      'Triage: link the source mention to the canonical page above, or — if this',
-      'is genuinely a distinct entity — re-create with `frontmatter.slug_violation_note`.',
-    ].join('\n');
-    await this.putPage(reviewSlug, {
-      type: 'task',
-      title: `Name collision: ${rejectedSlug}`,
-      compiled_truth: body,
-      frontmatter: {
-        status: 'open',
-        priority: 'P2',
-        rejected_slug: rejectedSlug,
-        canonical_slug: hit.collidesWith,
-        match_reason: hit.reason,
-        match_score: Number(hit.score.toFixed(2)),
-        created: date,
-      },
-    }, { sourceId });
+    await appendNameCollision(rejectedSlug, hit, page, sourceId);
   }
 
   async putPage(slug: string, page: PageInput, opts?: { sourceId?: string }): Promise<Page> {
@@ -883,7 +863,7 @@ export class PostgresEngine implements BrainEngine {
           const hit = findPhoneticCollision(slug, candidates);
           if (hit) {
             await this.queueNameCollision(slug, hit, page, sourceId).catch(() => { /* triage queue is best-effort */ });
-            throw new Error(`Rejected new entity slug "${slug}": phonetic near-duplicate of existing "${hit.collidesWith}" (${hit.reason}, score ${hit.score.toFixed(2)}). Link to that page, or set frontmatter.slug_violation_note if genuinely distinct. Queued at name_collision_review/.`);
+            throw new Error(`Rejected new entity slug "${slug}": phonetic near-duplicate of existing "${hit.collidesWith}" (${hit.reason}, score ${hit.score.toFixed(2)}). Link to that page, or set frontmatter.slug_violation_note if genuinely distinct. Logged to ~/.gbrain/name-collision-review.jsonl for triage.`);
           }
         }
       }

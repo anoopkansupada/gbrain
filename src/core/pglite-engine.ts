@@ -39,6 +39,7 @@ import type {
 } from './types.ts';
 import { validateSlug, validateEntitySlugShape, contentHash, rowToPage, rowToChunk, rowToSearchResult, takeRowToTake } from './utils.ts';
 import { parseEntitySlug, findPhoneticCollision, type PhoneticCollision } from './entity-phonetics.ts';
+import { appendNameCollision } from './name-collision-queue.ts';
 import { deriveResolutionTuple, finalizeScorecard } from './takes-resolution.ts';
 import { normalizeWeightForStorage } from './takes-fence.ts';
 import { GBrainError, PAGE_SORT_SQL } from './types.ts';
@@ -736,41 +737,16 @@ export class PGLiteEngine implements BrainEngine {
     return rowToPage(rows[0] as Record<string, unknown>);
   }
 
-  /** Record a Guard-1 phonetic rejection as a triage task page (parity with
-   *  postgres-engine). Best-effort; the non-entity slug bypasses both gates. */
+  /** Record a Guard-1 phonetic rejection to the durable JSONL triage queue
+   *  (parity with postgres-engine; see name-collision-queue.ts for why a file
+   *  and not a gbrain page). */
   private async queueNameCollision(
     rejectedSlug: string,
     hit: PhoneticCollision,
     page: PageInput,
     sourceId: string,
   ): Promise<void> {
-    const date = new Date().toISOString().slice(0, 10);
-    const reviewSlug = `name_collision_review/${date}/${rejectedSlug.replace(/\//g, '-')}`;
-    const body = [
-      `# Name collision: \`${rejectedSlug}\` rejected at write time`,
-      '',
-      `- **Rejected slug**: \`${rejectedSlug}\``,
-      `- **Likely canonical**: [[${hit.collidesWith}]]`,
-      `- **Match reason**: ${hit.reason} (score ${hit.score.toFixed(2)})`,
-      `- **Attempted title**: ${page.title ?? '(none)'}`,
-      '',
-      'Triage: link the source mention to the canonical page above, or — if this',
-      'is genuinely a distinct entity — re-create with `frontmatter.slug_violation_note`.',
-    ].join('\n');
-    await this.putPage(reviewSlug, {
-      type: 'task',
-      title: `Name collision: ${rejectedSlug}`,
-      compiled_truth: body,
-      frontmatter: {
-        status: 'open',
-        priority: 'P2',
-        rejected_slug: rejectedSlug,
-        canonical_slug: hit.collidesWith,
-        match_reason: hit.reason,
-        match_score: Number(hit.score.toFixed(2)),
-        created: date,
-      },
-    }, { sourceId });
+    await appendNameCollision(rejectedSlug, hit, page, sourceId);
   }
 
   async putPage(slug: string, page: PageInput, opts?: { sourceId?: string }): Promise<Page> {
@@ -800,7 +776,7 @@ export class PGLiteEngine implements BrainEngine {
           const hit = findPhoneticCollision(slug, cand.rows as Array<{ slug: string }>);
           if (hit) {
             await this.queueNameCollision(slug, hit, page, sourceId).catch(() => { /* triage queue is best-effort */ });
-            throw new Error(`Rejected new entity slug "${slug}": phonetic near-duplicate of existing "${hit.collidesWith}" (${hit.reason}, score ${hit.score.toFixed(2)}). Link to that page, or set frontmatter.slug_violation_note if genuinely distinct. Queued at name_collision_review/.`);
+            throw new Error(`Rejected new entity slug "${slug}": phonetic near-duplicate of existing "${hit.collidesWith}" (${hit.reason}, score ${hit.score.toFixed(2)}). Link to that page, or set frontmatter.slug_violation_note if genuinely distinct. Logged to ~/.gbrain/name-collision-review.jsonl for triage.`);
           }
         }
       }
