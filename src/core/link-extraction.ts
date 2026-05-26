@@ -796,7 +796,14 @@ export async function extractFrontmatterLinks(
     for (const field of mapping.fields) {
       const value = frontmatter[field];
       if (value == null) continue;
-      const entries = Array.isArray(value) ? value : [value];
+      // Deep-flatten: some importers stored attendees as a triple-nested
+      // array (`[[["people/..."]]]`, the Petri/Karel brief shape) which a
+      // single Array.isArray level left as a nested-array "entry" that
+      // matched neither the string nor object branch below — so the page
+      // emitted zero attendee links. Flatten fully so every leaf scalar/
+      // object is considered. (Guard 2, 2026-05-26.)
+      const entries = (Array.isArray(value) ? value.flat(Infinity) : [value])
+        .filter((e) => e != null);
 
       for (const entry of entries) {
         // Extract the name to resolve. Strings pass through; objects use
