@@ -1,0 +1,4 @@
+// Routing eval fixtures for skills/skill-optimizer.
+{"intent":"please optimize this skill for me now","expected_skill":"skill-optimizer"}
+{"intent":"please skillopt for me now","expected_skill":"skill-optimizer"}
+{"intent":"please improve this skill.md for me now","expected_skill":"skill-optimizer"}
