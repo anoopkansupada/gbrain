@@ -38,6 +38,7 @@ import type {
   DomainBankSampleOpts, CorpusSampleOpts, DomainBankRow,
 } from './types.ts';
 import { validateSlug, validateEntitySlugShape, contentHash, rowToPage, rowToChunk, rowToSearchResult, takeRowToTake } from './utils.ts';
+import { parseEntitySlug, findPhoneticCollision, type PhoneticCollision } from './entity-phonetics.ts';
 import { deriveResolutionTuple, finalizeScorecard } from './takes-resolution.ts';
 import { normalizeWeightForStorage } from './takes-fence.ts';
 import { GBrainError, PAGE_SORT_SQL } from './types.ts';
@@ -735,20 +736,72 @@ export class PGLiteEngine implements BrainEngine {
     return rowToPage(rows[0] as Record<string, unknown>);
   }
 
+  /** Record a Guard-1 phonetic rejection as a triage task page (parity with
+   *  postgres-engine). Best-effort; the non-entity slug bypasses both gates. */
+  private async queueNameCollision(
+    rejectedSlug: string,
+    hit: PhoneticCollision,
+    page: PageInput,
+    sourceId: string,
+  ): Promise<void> {
+    const date = new Date().toISOString().slice(0, 10);
+    const reviewSlug = `name_collision_review/${date}/${rejectedSlug.replace(/\//g, '-')}`;
+    const body = [
+      `# Name collision: \`${rejectedSlug}\` rejected at write time`,
+      '',
+      `- **Rejected slug**: \`${rejectedSlug}\``,
+      `- **Likely canonical**: [[${hit.collidesWith}]]`,
+      `- **Match reason**: ${hit.reason} (score ${hit.score.toFixed(2)})`,
+      `- **Attempted title**: ${page.title ?? '(none)'}`,
+      '',
+      'Triage: link the source mention to the canonical page above, or — if this',
+      'is genuinely a distinct entity — re-create with `frontmatter.slug_violation_note`.',
+    ].join('\n');
+    await this.putPage(reviewSlug, {
+      type: 'task',
+      title: `Name collision: ${rejectedSlug}`,
+      compiled_truth: body,
+      frontmatter: {
+        status: 'open',
+        priority: 'P2',
+        rejected_slug: rejectedSlug,
+        canonical_slug: hit.collidesWith,
+        match_reason: hit.reason,
+        match_score: Number(hit.score.toFixed(2)),
+        created: date,
+      },
+    }, { sourceId });
+  }
+
   async putPage(slug: string, page: PageInput, opts?: { sourceId?: string }): Promise<Page> {
     slug = validateSlug(slug);
     const hash = page.content_hash || contentHash(page);
     const frontmatter = page.frontmatter || {};
     const sourceId = opts?.sourceId ?? 'default';
 
-    // WS-5 (2026-05-25): reject NEW catchall entity slugs at write time (parity
-    // with postgres-engine). Updates to existing pages + slug_violation_note pass.
+    // Entity write-time guards (parity with postgres-engine): catchall slug-shape
+    // gate (WS-5 / PR #13) + phonetic resolve-before-create (Guard 1, 2026-05-26).
+    // Both fire only for a NEW people/* or companies/* slug; updates and
+    // frontmatter.slug_violation_note pass. One existence probe serves both.
     {
-      const shape = validateEntitySlugShape(slug);
-      if (!shape.ok && !frontmatter.slug_violation_note) {
+      const entity = parseEntitySlug(slug);
+      if (entity && !frontmatter.slug_violation_note) {
         const probe = await this.db.query('SELECT 1 FROM pages WHERE slug = $1 AND source_id = $2 LIMIT 1', [slug, sourceId]);
         if (probe.rows.length === 0) {
-          throw new Error(`Rejected new entity slug "${slug}": ${shape.reason} ${shape.suggestion} To override, set frontmatter.slug_violation_note explaining why this slug is canonical.`);
+          const shape = validateEntitySlugShape(slug);
+          if (!shape.ok) {
+            throw new Error(`Rejected new entity slug "${slug}": ${shape.reason} ${shape.suggestion} To override, set frontmatter.slug_violation_note explaining why this slug is canonical.`);
+          }
+          const firstChar = entity.base.slice(0, 1).toLowerCase();
+          const cand = await this.db.query(
+            "SELECT slug FROM pages WHERE slug LIKE $1 AND deleted_at IS NULL LIMIT 5000",
+            [`${entity.kind}/${firstChar}%`],
+          );
+          const hit = findPhoneticCollision(slug, cand.rows as Array<{ slug: string }>);
+          if (hit) {
+            await this.queueNameCollision(slug, hit, page, sourceId).catch(() => { /* triage queue is best-effort */ });
+            throw new Error(`Rejected new entity slug "${slug}": phonetic near-duplicate of existing "${hit.collidesWith}" (${hit.reason}, score ${hit.score.toFixed(2)}). Link to that page, or set frontmatter.slug_violation_note if genuinely distinct. Queued at name_collision_review/.`);
+          }
         }
       }
     }

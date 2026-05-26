@@ -407,21 +407,179 @@ export async function runPhaseInferLinks(
     }
   }
 
+  // Prose-mention pass (Guard 2, 2026-05-26): the frontmatter loop above only
+  // links structured fields. Raw Granola cron meetings name orgs/people in the
+  // transcript BODY (e.g. "Anchorage, Lemma, BACI, Goldman, UBS") that stay
+  // unlinked. Scan meeting bodies for existing canonical entity names and emit
+  // `mentions` edges. Never creates pages — dictionary is existing entities
+  // only, so the create-policy ([[feedback_create_entity_pages_from_meetings]])
+  // is honored by construction.
+  let proseMeetingsScanned = 0;
+  let proseMentionsLinked = 0;
+  try {
+    const prose = await runProseMentionPass(engine, { dryRun, yieldDuringPhase: opts.yieldDuringPhase });
+    proseMeetingsScanned = prose.meetingsScanned;
+    proseMentionsLinked = prose.mentionsLinked;
+  } catch {
+    // Prose pass is additive; a failure here must not fail the whole phase.
+  }
+
   return {
     phase: 'infer_links',
     status: 'ok',
     duration_ms: 0,
     summary: dryRun
-      ? `(dry-run) would wrap ${linksInferred} typed edges across ${pagesUpdated}/${pagesScanned} pages; ${linksUnresolved} unresolved targets`
-      : `wrapped ${linksInferred} typed edges across ${pagesUpdated}/${pagesScanned} pages; ${linksUnresolved} unresolved targets`,
+      ? `(dry-run) would wrap ${linksInferred} typed edges across ${pagesUpdated}/${pagesScanned} pages; ${linksUnresolved} unresolved targets; ${proseMentionsLinked} prose mentions across ${proseMeetingsScanned} meetings`
+      : `wrapped ${linksInferred} typed edges across ${pagesUpdated}/${pagesScanned} pages; ${linksUnresolved} unresolved targets; linked ${proseMentionsLinked} prose mentions across ${proseMeetingsScanned} meetings`,
     details: {
       dryRun,
       links_inferred: linksInferred,
       links_unresolved: linksUnresolved,
       pages_scanned: pagesScanned,
       pages_updated: pagesUpdated,
+      prose_meetings_scanned: proseMeetingsScanned,
+      prose_mentions_linked: proseMentionsLinked,
     },
   };
+}
+
+/**
+ * Ultra-common tokens that occasionally coincide with a single-word entity
+ * name. A single-token dictionary entry matching one of these is skipped to
+ * avoid linking generic prose. Multi-word names ("goldman sachs") are never
+ * affected.
+ */
+const PROSE_STOPWORDS: ReadonlySet<string> = new Set([
+  'the', 'our', 'this', 'that', 'call', 'team', 'data', 'group', 'labs',
+  'capital', 'partners', 'ventures', 'company', 'meeting', 'notes', 'about',
+  'with', 'from', 'into', 'over', 'next', 'week', 'today', 'people',
+]);
+
+export interface ProseMentionResult {
+  meetingsScanned: number;
+  mentionsLinked: number;
+}
+
+/**
+ * Build a lowercase name/phrase → canonical-slug dictionary from existing
+ * `people/*` and `companies/*` pages (title + slug-base spelled out). Only
+ * 1–3 token names are kept (the scan generates up to 3-grams). Single-token
+ * names must clear the stopword + length floor.
+ */
+export async function buildEntityDictionary(engine: BrainEngine): Promise<Map<string, string>> {
+  const rows = await engine.executeRaw<{ slug: string; title: string | null }>(`
+    SELECT slug, title FROM pages
+    WHERE deleted_at IS NULL
+      AND (slug LIKE 'people/%' OR slug LIKE 'companies/%')
+    LIMIT 50000
+  `);
+  const dict = new Map<string, string>();
+  for (const r of rows) {
+    const base = r.slug.split('/')[1];
+    // Skip single-token person catchalls (people/anoop, people/justin). They
+    // are legacy bad slugs ([[feedback_no_slug_catchalls]]); linking bare
+    // first names to them reinforces the catchall and is ambiguous. Real
+    // people resolve via their first-last slug. Single-token COMPANY slugs
+    // are legitimate (anchorage, lemma, baci) and kept.
+    if (r.slug.startsWith('people/') && (base?.split('-').filter(Boolean).length ?? 0) < 2) continue;
+    const names = new Set<string>();
+    if (r.title) names.add(r.title);
+    if (base) names.add(base.replace(/-/g, ' '));
+    for (const raw of names) {
+      const lc = raw.toLowerCase().trim();
+      if (lc.length < 3) continue;
+      const tokens = lc.split(/\s+/).filter(Boolean);
+      if (tokens.length === 0 || tokens.length > 3) continue;
+      if (tokens.length === 1 && (lc.length < 3 || PROSE_STOPWORDS.has(lc))) continue;
+      if (!dict.has(lc)) dict.set(lc, r.slug);
+    }
+  }
+  return dict;
+}
+
+/**
+ * Scan a meeting body for canonical entity names. Tokenizes into proper-noun
+ * candidates (a token that is Capitalized or an ALL-CAPS acronym), then tries
+ * the longest 3→2→1-gram against the dictionary, skipping consumed tokens.
+ * Returns the set of resolved slugs (dedup'd). Pure — no IO.
+ */
+export function scanBodyForEntities(body: string, dict: Map<string, string>): Set<string> {
+  const found = new Set<string>();
+  if (!body) return found;
+  const TOKEN_RE = /[A-Za-z][A-Za-z0-9&.'-]*/g;
+  // Capture tokens with their original case.
+  const tokens = body.match(TOKEN_RE) ?? [];
+  const isProper = (t: string) => /^[A-Z]/.test(t); // Capitalized or ALL-CAPS
+  for (let i = 0; i < tokens.length; i++) {
+    if (!isProper(tokens[i])) continue;
+    for (let n = Math.min(3, tokens.length - i); n >= 1; n--) {
+      const phrase = tokens.slice(i, i + n).join(' ').toLowerCase();
+      const slug = dict.get(phrase);
+      if (slug) {
+        found.add(slug);
+        i += n - 1; // consume the matched span (longest-match wins)
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Prose-mention linking pass over raw Granola cron meetings. Emits `mentions`
+ * edges meeting→entity for canonical names found in the transcript body.
+ * Idempotent (addLinksBatch ON CONFLICT DO NOTHING); bounded per run.
+ */
+export async function runProseMentionPass(
+  engine: BrainEngine,
+  opts: { dryRun?: boolean; maxMeetings?: number; yieldDuringPhase?: () => Promise<void> } = {},
+): Promise<ProseMentionResult> {
+  const dryRun = opts.dryRun === true;
+  const maxMeetings = opts.maxMeetings ?? 500;
+
+  const dict = await buildEntityDictionary(engine);
+  if (dict.size === 0) return { meetingsScanned: 0, mentionsLinked: 0 };
+
+  const meetings = await engine.executeRaw<{ slug: string; compiled_truth: string | null }>(`
+    SELECT slug, compiled_truth FROM pages
+    WHERE deleted_at IS NULL
+      AND slug LIKE 'meetings/%'
+      AND compiled_truth IS NOT NULL
+      AND length(compiled_truth) > 0
+    ORDER BY updated_at DESC
+    LIMIT ${maxMeetings}
+  `);
+
+  let meetingsScanned = 0;
+  let mentionsLinked = 0;
+  for (const m of meetings) {
+    meetingsScanned += 1;
+    const slugs = scanBodyForEntities(m.compiled_truth ?? '', dict);
+    slugs.delete(m.slug); // never self-link
+    if (slugs.size === 0) continue;
+    if (dryRun) {
+      mentionsLinked += slugs.size;
+      continue;
+    }
+    const links = [...slugs].map((to_slug) => ({
+      from_slug: m.slug,
+      to_slug,
+      link_type: 'mentions',
+      context: 'prose mention (cron meeting body)',
+      link_source: 'prose-inference',
+      origin_slug: m.slug,
+      origin_field: 'body',
+    }));
+    try {
+      mentionsLinked += await engine.addLinksBatch(links);
+    } catch {
+      // Per-meeting failure non-fatal; next run retries idempotently.
+    }
+    if (opts.yieldDuringPhase && meetingsScanned % 50 === 0) {
+      try { await opts.yieldDuringPhase(); } catch { /* keepalive non-fatal */ }
+    }
+  }
+  return { meetingsScanned, mentionsLinked };
 }
 
 async function targetExists(engine: BrainEngine, slug: string): Promise<boolean> {
