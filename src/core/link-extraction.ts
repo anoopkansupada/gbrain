@@ -607,6 +607,15 @@ export interface FrontmatterFieldMapping {
    * array; resolver tries each. E.g. investors → ['companies', 'funds', 'people'].
    */
   dirHint: string | string[];
+  /**
+   * v0.40 (2026-05-25): only emit an edge when the value is ALREADY a
+   * `dir/slug`; never fuzzy-resolve. For fields whose value is provenance /
+   * free text (e.g. `source: linkedin-export`), fuzzy resolution mis-matched
+   * to entity hubs like people/linkedin (7k+ garbage `source` edges that
+   * inflated the orphan metric). slugOnly fields skip the resolver for
+   * non-slug values and record them as unresolved instead.
+   */
+  slugOnly?: boolean;
 }
 
 /**
@@ -617,6 +626,9 @@ export interface FrontmatterFieldMapping {
  * different pageType filters coexist cleanly (vs an object-literal which
  * would last-write-wins on key collision).
  */
+/** A value must look like `dir/slug` to count as an explicit graph edge for slugOnly fields. */
+const SOURCE_SLUG_SHAPE_RE = /^[a-z][a-z0-9_-]*\/.+$/;
+
 export const FRONTMATTER_LINK_MAP: FrontmatterFieldMapping[] = [
   // Person pages → companies
   { fields: ['company', 'companies'], pageType: 'person', type: 'works_at', direction: 'outgoing', dirHint: 'companies' },
@@ -639,8 +651,8 @@ export const FRONTMATTER_LINK_MAP: FrontmatterFieldMapping[] = [
   // wikilink pattern telegram-thread pages already emit. WS-A 2026-05-25.
   { fields: ['participants'], type: 'mentions', direction: 'outgoing', dirHint: 'people' },
   { fields: ['sources'], type: 'discussed_in', direction: 'incoming', dirHint: ['source', 'media'] },
-  { fields: ['source'], type: 'source', direction: 'outgoing', dirHint: '' /* already slug-shaped */ },
-  { fields: ['related', 'see_also'], type: 'related_to', direction: 'outgoing', dirHint: '' },
+  { fields: ['source'], type: 'source', direction: 'outgoing', dirHint: '', slugOnly: true /* provenance/free-text must NOT fuzzy-resolve to entity hubs */ },
+  { fields: ['related', 'see_also'], type: 'related_to', direction: 'outgoing', dirHint: '', slugOnly: true },
 ];
 
 // ─── Slug resolver ──────────────────────────────────────────────
@@ -815,6 +827,14 @@ export async function extractFrontmatterLinks(
         // so this can't create a dead link); a display-only wrapper falls through
         // to the resolver with the inner text.
         let resolved: string | null;
+        if (mapping.slugOnly && !SOURCE_SLUG_SHAPE_RE.test(name)) {
+          // slugOnly field (source / related / see_also): the value must
+          // already be a dir/slug. Free-text/provenance (e.g. "linkedin-export")
+          // is NOT a graph edge — record unresolved instead of fuzzy-matching
+          // it to an entity hub like people/linkedin.
+          unresolved.push({ field, name });
+          continue;
+        }
         const wrapped = name.match(WRAPPED_WIKILINK_RE);
         if (wrapped) {
           resolved = wrapped[1];

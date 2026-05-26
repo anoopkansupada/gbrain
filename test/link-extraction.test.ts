@@ -887,3 +887,31 @@ describe('extractFrontmatterLinks — WS-3 wikilink-wrapped participants', () =>
     expect(candidates[0].targetSlug).toBe('people/ghost-nobody');
   });
 });
+
+describe('extractFrontmatterLinks — slugOnly source field (no provenance hubs)', () => {
+  const pages = { 'sources/linkedin-export': 'sources/linkedin-export', 'people/linkedin': 'people/linkedin' };
+  const resolver = makeFixtureResolver(pages);
+
+  test('free-text source value does NOT create an edge (no people/linkedin hub)', async () => {
+    const { candidates, unresolved } = await extractFrontmatterLinks(
+      'people/jane-doe', 'person' as never, { source: 'linkedin-export' }, resolver,
+    );
+    expect(candidates).toHaveLength(0);
+    expect(unresolved.some(u => u.field === 'source' && u.name === 'linkedin-export')).toBe(true);
+  });
+
+  test('explicit dir/slug source value DOES create an edge', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'people/jane-doe', 'person' as never, { source: 'sources/linkedin-export' }, resolver,
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].targetSlug).toBe('sources/linkedin-export');
+  });
+
+  test('free-text related value does NOT fuzzy-match', async () => {
+    const { candidates } = await extractFrontmatterLinks(
+      'people/jane-doe', 'person' as never, { related: 'some free text note' }, resolver,
+    );
+    expect(candidates).toHaveLength(0);
+  });
+});
