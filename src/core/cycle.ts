@@ -70,6 +70,7 @@ export type CyclePhase =
   // v0.39 T12: schema-suggest passive trigger (D3 + D4 plan-eng-review).
   // Wraps runSuggest() — same library the CLI verb + EIIRP call.
   | 'infer_links'  // v0.36 typed-edge inference from frontmatter
+  | 'link_mine'    // PC3: cosine-similarity edge mining (related + cites)
   | 'schema-suggest';
 
 export const ALL_PHASES: CyclePhase[] = [
@@ -117,6 +118,11 @@ export const ALL_PHASES: CyclePhase[] = [
   'calibration_profile',
   // v0.36 infer_links: typed-edge inference
   'infer_links',
+  // PC3 link_mine: cosine-similarity edge mining. Runs AFTER infer_links
+  // (so frontmatter wikilinks already materialized) and AFTER the hub set it
+  // reads reflects this cycle's earlier link writes; BEFORE embed so any
+  // mined-edge-driven recompute is downstream.
+  'link_mine',
   'embed',
   'orphans',
   // v0.39 T12: passive schema-suggest. Runs LATE so post-sync brain state
@@ -168,6 +174,12 @@ export const PHASE_SCOPE: Record<CyclePhase, PhaseScope> = {
   embed: 'global',
   orphans: 'global',
   purge: 'global',
+  // infer_links scans people/companies brain-wide + a prose-mention pass over
+  // meetings; writes frontmatter wikilinks + mentions edges across sources.
+  infer_links: 'global',
+  // link_mine sweeps a cursor-paged window of the whole brain and writes
+  // edges across sources; serialize it like the other global write phases.
+  link_mine: 'global',
   'schema-suggest': 'source',
 };
 
@@ -200,6 +212,8 @@ const NEEDS_LOCK_PHASES: ReadonlySet<CyclePhase> = new Set([
   'grade_takes',
   'calibration_profile',
   'infer_links',
+  // PC3 — writes links rows (cosine-mine edges) + a config cursor.
+  'link_mine',
   'embed',
   'purge',
 ]);
@@ -279,6 +293,8 @@ export interface CycleReport {
     links_inferred: number;
     /** v0.36: number of would-be inferences whose target slug was missing. */
     links_unresolved: number;
+    /** PC3: number of cosine-mined edges written (related + cites) by link_mine. */
+    edges_mined: number;
     /**
      * v0.35.5: number of phantom unprefixed entity pages (e.g. `alice.md`)
      * redirected to their canonical prefixed slugs (`people/alice-example`)
@@ -1659,6 +1675,32 @@ export async function runCycle(
     }
 
 
+    // ── Phase 7.6: link_mine (PC3) ─────────────────────────────
+    if (phases.includes('link_mine')) {
+      checkAborted(opts.signal);
+      if (!engine) {
+        phaseResults.push({
+          phase: 'link_mine',
+          status: 'skipped',
+          duration_ms: 0,
+          summary: 'no database connected',
+          details: { reason: 'no_database' },
+        });
+      } else {
+        progress.start('cycle.link_mine');
+        const { runPhaseLinkMine } = await import('./cycle/phases/link-mine.ts');
+        const { result, duration_ms } = await timePhase(() => runPhaseLinkMine(engine, {
+          dryRun,
+          yieldDuringPhase: opts.yieldDuringPhase,
+        }));
+        result.duration_ms = duration_ms;
+        phaseResults.push(result);
+        progress.finish();
+      }
+      await safeYield(opts.yieldBetweenPhases);
+    }
+
+
     // ── Phase 8: embed ──────────────────────────────────────────
     if (phases.includes('embed')) {
       checkAborted(opts.signal);
@@ -1835,6 +1877,7 @@ function emptyTotals(): CycleReport['totals'] {
     consolidate_takes_written: 0,
     links_inferred: 0,
     links_unresolved: 0,
+    edges_mined: 0,
     phantoms_redirected: 0,
     phantoms_ambiguous: 0,
     phantoms_skipped_drift: 0,
@@ -1879,6 +1922,8 @@ function extractTotals(phases: PhaseResult[]): CycleReport['totals'] {
     } else if (p.phase === 'infer_links' && p.details) {
       t.links_inferred = Number(p.details.links_inferred ?? 0);
       t.links_unresolved = Number(p.details.links_unresolved ?? 0);
+    } else if (p.phase === 'link_mine' && p.details) {
+      t.edges_mined = Number(p.details.edges_written ?? 0);
     } else if (p.phase === 'extract_facts' && p.details) {
       // v0.35.5: phantom-redirect counters live inside the extract_facts
       // phase's details block (the pre-pass runs before the main reconcile
