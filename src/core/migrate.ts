@@ -4257,6 +4257,24 @@ export const MIGRATIONS: Migration[] = [
         WHERE config ? 'github_repo';
     `,
   },
+  {
+    version: 93,
+    name: 'links_link_source_inference_provenance',
+    // PC3 — widen the link_source provenance enum to cover machine-inferred
+    // edges. The v13 constraint only allowed ('markdown','frontmatter','manual'),
+    // but two inference phases need their own provenance tag so their edges are
+    // auditable and bulk-reversible:
+    //   - 'prose-inference' — infer_links prose-mention pass (shipped #15)
+    //   - 'cosine-mine'     — link_mine cosine-similarity phase (this PR)
+    // Widening a CHECK can never violate existing rows, so this is a fast,
+    // metadata-only ALTER (no table scan). Idempotent: drop-if-exists + re-add.
+    sql: `
+      ALTER TABLE links DROP CONSTRAINT IF EXISTS links_link_source_check;
+      ALTER TABLE links ADD CONSTRAINT links_link_source_check
+        CHECK (link_source IS NULL OR link_source IN
+          ('markdown', 'frontmatter', 'manual', 'prose-inference', 'cosine-mine'));
+    `,
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length > 0
