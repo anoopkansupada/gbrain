@@ -1,0 +1,7 @@
+// Routing eval fixtures for skills/deal-entity-reconciler.
+{"intent":"reconcile the deals that have no company page","expected_skill":"deal-entity-reconciler"}
+{"intent":"match deals to companies","expected_skill":"deal-entity-reconciler"}
+{"intent":"which deals have no company","expected_skill":"deal-entity-reconciler"}
+{"intent":"link these unmatched deals to their entities","expected_skill":"deal-entity-reconciler"}
+{"intent":"resolve the deal entities and connect the people","expected_skill":"deal-entity-reconciler"}
+{"intent":"reconcile this deal to its company","expected_skill":"deal-entity-reconciler"}

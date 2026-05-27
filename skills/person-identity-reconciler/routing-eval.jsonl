@@ -1,0 +1,6 @@
+// Routing eval fixtures for skills/person-identity-reconciler.
+{"intent":"reconcile the orphan people and link them to companies","expected_skill":"person-identity-reconciler"}
+{"intent":"dedup duplicate person pages across linkedin and telegram","expected_skill":"person-identity-reconciler"}
+{"intent":"match people across sources by email and telegram","expected_skill":"person-identity-reconciler"}
+{"intent":"de-orphan my contacts","expected_skill":"person-identity-reconciler"}
+{"intent":"merge duplicate person pages","expected_skill":"person-identity-reconciler"}
