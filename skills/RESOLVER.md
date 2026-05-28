@@ -139,3 +139,7 @@ These apply to ALL brain-writing skills:
 | "make pdf from brain", "brain pdf", "convert brain page to pdf", "publish this page as pdf", "export brain page" | `skills/brain-pdf/SKILL.md` |
 | "voice note", "ingest this voice memo", "transcribe and file", "voice note ingest", "save this audio note" | `skills/voice-note-ingest/SKILL.md` |
 
+
+| "reconcile deals" | `skills/deal-entity-reconciler/SKILL.md` |
+
+| "reconcile people" | `skills/person-identity-reconciler/SKILL.md` |
