@@ -46,6 +46,21 @@ This recipe sets up a one-time auth (you'll receive a code on Telegram itself), 
 2. Inline match-back to person pages via Telegram username (`telegram: @username` frontmatter added)
 3. Optional channel ingest (e.g., crypto news channels you follow) as `~/brain/media/telegram/<channel>/<date>.md`
 
+## Resolution
+Authority: [[references/email-person-resolution-sop]].
+
+Telegram-specific match keys take priority for inbound resolution:
+1. `telegram_user_id` (exact, integer)
+2. `telegram` / `telegram_username` (exact, lowercased)
+3. `phone_numbers[]` (exact, E.164)
+
+The SOP boolean ladder is the floor BENEATH those keys — before minting a
+new person slug, every importer MUST also probe by email, LinkedIn URL stem,
+exact name slug, nickname-expanded slug, and alias slug. A single-token slug
+is never an enrich target. Decisions are logged to
+`~/.gbrain/integrations/telegram-export/heartbeat.jsonl` with the list of
+keys actually checked, so a downstream reconciler can audit.
+
 ## Architecture
 
 ```
